@@ -1,0 +1,19 @@
+{
+  "name": "prenotazioni-ilenia",
+  "private": true,
+  "description": "Gestione prenotazioni per Ilenia: pannello PWA + bot WhatsApp (API Cloud ufficiale di Meta)",
+  "workspaces": [
+    "shared",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "test": "npm run test -w shared",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w web",
+    "test:db": "bash supabase/tests/esegui.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

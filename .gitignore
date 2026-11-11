@@ -1,0 +1,19 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# variabili d'ambiente: mai nel repository
+.env
+.env.*
+!.env.example
+.dev.vars
+.wrangler/
+
+.DS_Store
+
+# foto delle prove nel browser
+strumenti/prova-pannello/foto/

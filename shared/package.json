@@ -1,0 +1,22 @@
+{
+  "name": "@ilenia/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Codice condiviso tra pannello e Worker: fuso Europe/Rome, telefoni, orari, tipi del database",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "luxon": "^3.7.2"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.6",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}
