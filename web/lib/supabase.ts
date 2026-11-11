@@ -2,7 +2,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@ilenia/shared/tipi-db'
-import { fetchDemo } from './demo/backend'
+import { fetchDemo } from '@ilenia/shared/demo/backend'
 
 /**
  * Client Supabase del browser. Usa solo la chiave pubblica: cosa si può

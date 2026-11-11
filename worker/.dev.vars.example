@@ -1,0 +1,9 @@
+# Copia in worker/.dev.vars per "npm run dev -w worker" (file ignorato da git).
+SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_...
+WHATSAPP_APP_SECRET=una-stringa-di-prova
+WHATSAPP_VERIFY_TOKEN=una-parola-segreta-a-scelta
+# Senza token Meta il bot gira in modalità simulata (risposte nei log).
+WHATSAPP_MODALITA=simulata
+# WHATSAPP_TOKEN=
+# WHATSAPP_PHONE_NUMBER_ID=

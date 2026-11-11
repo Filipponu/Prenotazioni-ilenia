@@ -8,8 +8,8 @@
  */
 import { chiaveSettimana, creaDatiDemo, EMAIL_DEMO, ID_OPERATRICE, ID_UTENTE, PASSWORD_DEMO, type DbDemo, type Riga } from './dati'
 
-const CHIAVE_DATI = 'ilenia-demo-dati-v1'
-const CHIAVE_SETTIMANA = 'ilenia-demo-settimana-v1'
+const CHIAVE_DATI = 'ilenia-demo-dati-v2'
+const CHIAVE_SETTIMANA = 'ilenia-demo-settimana-v2'
 
 // caricati alla prima richiesta (non all'import, che avviene anche durante la build)
 let db: DbDemo = {}
@@ -34,6 +34,28 @@ function salva(dati: DbDemo = db) {
   } catch {
     // niente: la demo funziona lo stesso, ma non ricorda le modifiche
   }
+}
+
+let ritardoMs = 60
+
+/** Ritardo simulato di ogni richiesta (0 nei test). */
+export function impostaRitardoDemo(ms: number) {
+  ritardoMs = ms
+}
+
+/** Usa un insieme di dati preciso (per i test). */
+export function usaDatiDemo(dati: DbDemo) {
+  db = dati
+  caricato = true
+}
+
+/** Lettura diretta dei dati (per i test e il simulatore). */
+export function datiDemo(): DbDemo {
+  if (!caricato) {
+    db = carica()
+    caricato = true
+  }
+  return db
 }
 
 /** Rimette i dati di esempio iniziali. */
@@ -75,6 +97,10 @@ function confronta(a: unknown, b: string): number {
 function condizione(colonna: string, espressione: string): (r: Riga) => boolean {
   const [op, ...resto] = espressione.split('.')
   const valore = resto.join('.')
+  if (op === 'not') {
+    const positiva = condizione(colonna, valore)
+    return (r) => !positiva(r)
+  }
   return (r) => {
     const v = r[colonna]
     switch (op) {
@@ -155,6 +181,23 @@ function ordina(righe: Riga[], ordini: string[]): Riga[] {
   })
 }
 
+/** Vista contatore_messaggi_mensile: base di esempio + messaggi registrati. */
+function contatore(): Riga[] {
+  const mesi = new Map<string, { liberi: number; template: number; ricevuti: number }>()
+  for (const b of db.contatore_base ?? []) {
+    mesi.set(String(b.mese), { liberi: Number(b.liberi), template: Number(b.template), ricevuti: Number(b.ricevuti) })
+  }
+  for (const l of db.log_messaggi ?? []) {
+    const mese = String(l.creato_il).slice(0, 7)
+    const m = mesi.get(mese) ?? { liberi: 0, template: 0, ricevuti: 0 }
+    if (l.direzione === 'in') m.ricevuti++
+    else if (l.costo === 'template') m.template++
+    else if (l.costo === 'libero') m.liberi++
+    mesi.set(mese, m)
+  }
+  return [...mesi].map(([mese, v]) => ({ mese, ...v }))
+}
+
 // ---------------------------------------------------------------------
 // Vincoli del database
 // ---------------------------------------------------------------------
@@ -169,7 +212,7 @@ class ErrorePg extends Error {
 
 const ATTIVI = ['in_attesa', 'confermato']
 
-function verifica(tabella: string, riga: Riga, id: string | undefined) {
+function verifica(tabella: string, riga: Riga, id: string | number | undefined) {
   if (tabella === 'appuntamenti') {
     const inizio = Date.parse(String(riga.inizio))
     const fine = Date.parse(String(riga.fine))
@@ -186,6 +229,11 @@ function verifica(tabella: string, riga: Riga, id: string | undefined) {
       if (conflitto) {
         throw new ErrorePg('23P01', 'conflicting key value violates exclusion constraint "appuntamenti_no_sovrapposizioni"')
       }
+    }
+  }
+  if (tabella === 'log_messaggi' && riga.wa_message_id) {
+    if ((db.log_messaggi ?? []).some((l) => l.id !== id && l.wa_message_id === riga.wa_message_id)) {
+      throw new ErrorePg('23505', 'duplicate key value violates unique constraint "log_messaggi_wa_message_id_key"')
     }
   }
   if (tabella === 'clienti' && riga.telefono) {
@@ -259,7 +307,7 @@ export async function fetchDemo(input: RequestInfo | URL, init?: RequestInit): P
   const corpo = testo ? (JSON.parse(testo) as unknown) : undefined
 
   // piccola attesa per sembrare una rete vera
-  await new Promise((r) => setTimeout(r, 60))
+  if (ritardoMs > 0) await new Promise((r) => setTimeout(r, ritardoMs))
 
   // ----- Auth
   if (url.pathname.startsWith('/auth/v1/')) {
@@ -303,6 +351,7 @@ export async function fetchDemo(input: RequestInfo | URL, init?: RequestInit): P
       return risposta(200, db.orari_settimanali)
     }
 
+    if (nome === 'contatore_messaggi_mensile') db.contatore_messaggi_mensile = contatore()
     const tabella = db[nome]
     if (!tabella) return risposta(404, { message: `Tabella ${nome} non gestita nella demo` })
     const corrisponde = filtro(url.searchParams)
@@ -335,9 +384,19 @@ export async function fetchDemo(input: RequestInfo | URL, init?: RequestInit): P
           promemoria_inviato_il: null,
         },
         chiusure: { motivo: null },
+        conversazioni: { stato: 'menu', contesto: {}, ultimo_messaggio_cliente_il: null, bot_in_pausa_fino_al: null },
+        lista_attesa: { attiva: true },
+        log_messaggi: {
+          cliente_id: null,
+          wa_message_id: null,
+          template_nome: null,
+          contenuto: null,
+          stato_consegna: null,
+          errore: null,
+        },
       }
       const nuove = lista.map((x) => ({
-        id: crypto.randomUUID(),
+        id: nome === 'log_messaggi' ? (tabella.length + 1) : crypto.randomUUID(),
         ...(predefiniti[nome] ?? {}),
         ...x,
         creato_il: adessoIso,

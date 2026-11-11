@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { modalitaDemo } from '@/lib/supabase'
 import { cx } from './ui'
 
 type Voce = { href: string; etichetta: string; icona: React.ReactNode }
@@ -48,8 +49,18 @@ export const VOCI: Voce[] = [
   },
 ]
 
+/** Solo nella demo: il simulatore del bot WhatsApp. */
+const VOCE_WHATSAPP: Voce = {
+  href: '/whatsapp/',
+  etichetta: 'WhatsApp',
+  icona: icona(
+    'M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z',
+  ),
+}
+
 export function Navigazione({ nomeOperatrice }: { nomeOperatrice: string }) {
   const percorso = usePathname()
+  const voci = modalitaDemo ? [VOCI[0]!, VOCE_WHATSAPP, ...VOCI.slice(1)] : VOCI
   const attiva = (href: string) => percorso === href || percorso === href.slice(0, -1)
 
   return (
@@ -61,7 +72,7 @@ export function Navigazione({ nomeOperatrice }: { nomeOperatrice: string }) {
           <p className="text-lg font-semibold text-stone-900">{nomeOperatrice}</p>
         </div>
         <ul className="flex flex-col gap-1">
-          {VOCI.map((v) => (
+          {voci.map((v) => (
             <li key={v.href}>
               <Link
                 href={v.href}
@@ -81,14 +92,15 @@ export function Navigazione({ nomeOperatrice }: { nomeOperatrice: string }) {
 
       {/* telefono: barra in basso */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-        <ul className="grid grid-cols-5">
-          {VOCI.map((v) => (
+        <ul className={cx('grid', voci.length > 5 ? 'grid-cols-6' : 'grid-cols-5')}>
+          {voci.map((v) => (
             <li key={v.href}>
               <Link
                 href={v.href}
                 aria-current={attiva(v.href) ? 'page' : undefined}
                 className={cx(
-                  'flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium',
+                  'flex flex-col items-center gap-0.5 py-2 font-medium',
+                  voci.length > 5 ? 'text-[10px] tracking-tight' : 'text-[11px]',
                   attiva(v.href) ? 'text-brand-700' : 'text-stone-500',
                 )}
               >

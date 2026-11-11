@@ -1,6 +1,6 @@
 'use client'
 
-import { ripristinaDemo } from '@/lib/demo/backend'
+import { ripristinaDemo } from '@ilenia/shared/demo/backend'
 import { useAvvisi } from './Avvisi'
 import { useConferma } from './Conferma'
 

@@ -10,6 +10,7 @@ import PaginaClienti from '@/app/(pannello)/clienti/page'
 import PaginaImpostazioni from '@/app/(pannello)/impostazioni/page'
 import PaginaOrari from '@/app/(pannello)/orari/page'
 import PaginaServizi from '@/app/(pannello)/servizi/page'
+import PaginaWhatsApp from '@/app/(pannello)/whatsapp/page'
 import Login from '@/app/login/page'
 import Inizio from '@/app/page'
 import { FornitoreAvvisi } from '@/components/Avvisi'
@@ -18,6 +19,7 @@ import { FornitoreSessione } from '@/lib/sessione'
 
 const PAGINE: Record<string, () => React.JSX.Element> = {
   '/agenda/': PaginaAgenda,
+  '/whatsapp/': PaginaWhatsApp,
   '/clienti/': PaginaClienti,
   '/servizi/': PaginaServizi,
   '/orari/': PaginaOrari,

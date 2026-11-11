@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useAvvisi } from '@/components/Avvisi'
 import { Campo, Pulsante, Scheda, Voce } from '@/components/ui'
 import { useSessione } from '@/lib/sessione'
-import { EMAIL_DEMO, PASSWORD_DEMO } from '@/lib/demo/dati'
+import { EMAIL_DEMO, PASSWORD_DEMO } from '@ilenia/shared/demo/dati'
 import { configurazioneMancante, modalitaDemo, supabase } from '@/lib/supabase'
 
 export default function Login() {

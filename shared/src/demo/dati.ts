@@ -3,14 +3,14 @@
  * appuntamenti calcolati rispetto alla settimana in corso, così la demo
  * sembra sempre "viva". Nomi e numeri sono inventati.
  */
-import { adesso, daDataOra, versoIso } from '@ilenia/shared/tempo'
+import { adesso, daDataOra, versoIso } from '../tempo'
 
 export const ID_UTENTE = '11111111-1111-4111-8111-111111111111'
 export const ID_OPERATRICE = 'a0000000-0000-4000-8000-000000000001'
 export const EMAIL_DEMO = 'ilenia@demo.it'
 export const PASSWORD_DEMO = 'demo'
 
-export type Riga = Record<string, unknown> & { id?: string }
+export type Riga = Record<string, unknown> & { id?: string | number }
 export type DbDemo = Record<string, Riga[]>
 
 const SERVIZI = [
@@ -211,9 +211,13 @@ export function creaDatiDemo(): DbDemo {
     chiusure,
     clienti,
     appuntamenti,
-    contatore_messaggi_mensile: [
-      { mese: ora.toUTC().toFormat('yyyy-LL'), liberi: 186, template: 2, ricevuti: 141 },
-    ],
+    // messaggi "già scambiati" nel mese, per dare senso al contatore
+    contatore_base: [{ mese: ora.toUTC().toFormat('yyyy-LL'), liberi: 186, template: 2, ricevuti: 141 }],
     log_messaggi: [],
+    conversazioni: [],
+    lista_attesa: [],
+    slot_liberati: [],
+    proposte_anticipo: [],
+    push_iscrizioni: [],
   }
 }
