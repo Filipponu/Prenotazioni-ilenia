@@ -5,6 +5,7 @@ import { formattaTelefono, linkWhatsApp } from '@ilenia/shared/telefono'
 import { dataBreve, daIso, oraBreve } from '@ilenia/shared/tempo'
 import { useCallback, useEffect, useState } from 'react'
 import { useAvvisi } from '@/components/Avvisi'
+import { useConferma } from '@/components/Conferma'
 import {
   CampiCliente,
   cercaClienti,
@@ -118,6 +119,7 @@ function SchedaCliente({
   onSalvata: () => void
 }) {
   const avvisi = useAvvisi()
+  const conferma = useConferma()
   const [dati, setDati] = useState<DatiCliente>(() => datiDaCliente(cliente))
   const [errori, setErrori] = useState<Partial<Record<keyof DatiCliente, string>>>({})
   const [inCorso, setInCorso] = useState(false)
@@ -167,9 +169,12 @@ function SchedaCliente({
   async function elimina() {
     if (!cliente) return
     if (
-      !window.confirm(
-        `Eliminare ${nomeCliente(cliente)}? Verranno cancellati anche tutti i suoi appuntamenti e la conversazione col bot.`,
-      )
+      !(await conferma({
+        titolo: 'Eliminare la cliente?',
+        messaggio: `Verranno cancellati ${nomeCliente(cliente)}, tutti i suoi appuntamenti e la conversazione col bot.`,
+        conferma: 'Elimina',
+        pericolo: true,
+      }))
     )
       return
     const { error } = await supabase().from('clienti').delete().eq('id', cliente.id)

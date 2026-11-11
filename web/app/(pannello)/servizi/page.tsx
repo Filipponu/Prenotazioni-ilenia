@@ -4,6 +4,7 @@ import type { Servizio } from '@ilenia/shared/tipi-db'
 import { durataLeggibile, prezzoLeggibile } from '@ilenia/shared/tempo'
 import { useCallback, useEffect, useState } from 'react'
 import { useAvvisi } from '@/components/Avvisi'
+import { useConferma } from '@/components/Conferma'
 import { Finestra } from '@/components/Finestra'
 import {
   Caricamento,
@@ -37,6 +38,7 @@ function leggiPrezzo(testo: string): number | null | 'errore' {
 export default function PaginaServizi() {
   const operatrice = useOperatrice()
   const avvisi = useAvvisi()
+  const conferma = useConferma()
   const [servizi, setServizi] = useState<Servizio[] | null>(null)
   const [modulo, setModulo] = useState<Modulo | null>(null)
   const [errori, setErrori] = useState<Partial<Record<keyof Modulo, string>>>({})
@@ -120,11 +122,18 @@ export default function PaginaServizi() {
   }
 
   async function elimina(s: Servizio) {
-    if (!window.confirm(`Eliminare il servizio "${s.nome}"?`)) return
+    if (!(await conferma({ titolo: 'Eliminare il servizio?', messaggio: `«${s.nome}» verrà eliminato.`, conferma: 'Elimina', pericolo: true })))
+      return
     const { error } = await supabase().from('servizi').delete().eq('id', s.id)
     if (error) {
       if (error.code === '23503') {
-        if (window.confirm(`"${s.nome}" è usato in alcuni appuntamenti e non si può eliminare. Vuoi disattivarlo?`)) {
+        if (
+          await conferma({
+            titolo: 'Servizio in uso',
+            messaggio: `«${s.nome}» è usato in alcuni appuntamenti e non si può eliminare. Vuoi disattivarlo? Resterà nello storico ma non sarà più prenotabile.`,
+            conferma: 'Disattiva',
+          })
+        ) {
           await cambiaAttivo(s, false)
           avvisi.successo('Servizio disattivato')
         }

@@ -1,19 +1,30 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { BannerDemo, EVENTO_RIPRISTINO } from '@/components/BannerDemo'
 import { Navigazione } from '@/components/Navigazione'
 import { Caricamento, Pulsante, Scheda } from '@/components/ui'
 import { useSessione } from '@/lib/sessione'
+import { modalitaDemo } from '@/lib/supabase'
 
 /** Tutte le pagine del pannello: accessibili solo dopo il login. */
 export default function LayoutPannello({ children }: { children: React.ReactNode }) {
   const { sessione, esci } = useSessione()
   const router = useRouter()
+  // demo: dopo "Ripristina dati" le pagine si ricaricano da capo
+  const [versione, setVersione] = useState(0)
 
   useEffect(() => {
     if (sessione.stato === 'anonimo') router.replace('/login/')
   }, [sessione.stato, router])
+
+  useEffect(() => {
+    if (!modalitaDemo) return
+    const ricarica = () => setVersione((v) => v + 1)
+    window.addEventListener(EVENTO_RIPRISTINO, ricarica)
+    return () => window.removeEventListener(EVENTO_RIPRISTINO, ricarica)
+  }, [])
 
   if (sessione.stato === 'configurazione_mancante') {
     return (
@@ -52,7 +63,10 @@ export default function LayoutPannello({ children }: { children: React.ReactNode
     <div className="min-h-dvh">
       <Navigazione nomeOperatrice={sessione.operatrice.nome} />
       <main className="px-4 pt-5 pb-28 md:ml-56 md:px-8 md:pt-8 md:pb-10">
-        <div className="mx-auto max-w-6xl">{children}</div>
+        <div className="mx-auto max-w-6xl">
+          {modalitaDemo ? <BannerDemo /> : null}
+          <div key={versione}>{children}</div>
+        </div>
       </main>
     </div>
   )

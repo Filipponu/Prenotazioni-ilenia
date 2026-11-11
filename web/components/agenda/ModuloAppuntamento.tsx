@@ -10,6 +10,7 @@ import { useOperatrice } from '@/lib/sessione'
 import { STATI } from '@/lib/stati'
 import { supabase } from '@/lib/supabase'
 import { useAvvisi } from '../Avvisi'
+import { useConferma } from '../Conferma'
 import { nomeCliente, SelettoreCliente } from '../clienti'
 import { Finestra } from '../Finestra'
 import { AreaTesto, Campo, Etichetta, Pulsante, Scelta, Voce } from '../ui'
@@ -74,6 +75,7 @@ export function ModuloAppuntamento({
 }) {
   const operatrice = useOperatrice()
   const avvisi = useAvvisi()
+  const conferma = useConferma()
   const [s, setS] = useState<Stato>(() => statoIniziale(apertura, servizi))
   const [errore, setErrore] = useState<string | null>(null)
   const [avvertenza, setAvvertenza] = useState<string | null>(null)
@@ -150,7 +152,8 @@ export function ModuloAppuntamento({
   }
 
   async function cambiaStato(nuovo: StatoAppuntamento, domanda: string) {
-    if (!esistente || !window.confirm(domanda)) return
+    if (!esistente || !(await conferma({ titolo: 'Disdire l\'appuntamento?', messaggio: domanda, conferma: 'Disdici', pericolo: true })))
+      return
     setInCorso(true)
     const { error } = await supabase().from('appuntamenti').update({ stato: nuovo }).eq('id', esistente.id)
     setInCorso(false)
@@ -163,7 +166,16 @@ export function ModuloAppuntamento({
   }
 
   async function elimina() {
-    if (!esistente || !window.confirm('Eliminare definitivamente l\'appuntamento? Non resterà nello storico.')) return
+    if (
+      !esistente ||
+      !(await conferma({
+        titolo: 'Eliminare l\'appuntamento?',
+        messaggio: 'Verrà cancellato definitivamente e non resterà nello storico della cliente.',
+        conferma: 'Elimina',
+        pericolo: true,
+      }))
+    )
+      return
     setInCorso(true)
     const { error } = await supabase().from('appuntamenti').delete().eq('id', esistente.id)
     setInCorso(false)
@@ -192,7 +204,7 @@ export function ModuloAppuntamento({
             <Pulsante
               variante="pericolo"
               className="mr-auto"
-              onClick={() => void cambiaStato('disdetto', `Disdire l'appuntamento di ${nomeCliente(esistente.clienti)}?`)}
+              onClick={() => void cambiaStato('disdetto', `L'appuntamento di ${nomeCliente(esistente.clienti)} verrà segnato come disdetto e lo spazio tornerà libero.`)}
             >
               Disdici
             </Pulsante>

@@ -40,3 +40,15 @@ npm run build       # web/out: file statici pronti per Cloudflare
 ```
 
 Nessuna chiave va nel codice: vedi [`.env.example`](.env.example).
+
+## Versione dimostrativa
+
+Per far vedere il pannello senza Supabase né WhatsApp: stessi componenti, dati di esempio
+(servizi, orari, clienti e appuntamenti della settimana in corso) che restano nel browser.
+
+```bash
+npm run demo -w web    # crea web/demo/dist/prenotazioni-ilenia-demo.html (un solo file)
+```
+
+Il file si apre con un qualsiasi server statico (es. `npx serve web/demo/dist`). In alternativa
+`NEXT_PUBLIC_DEMO=1 npm run build` produce la stessa demo come sito statico in `web/out`.

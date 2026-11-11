@@ -17,3 +17,4 @@ next-env.d.ts
 
 # foto delle prove nel browser
 strumenti/prova-pannello/foto/
+web/demo/dist/

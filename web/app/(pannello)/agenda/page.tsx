@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PropsCalendario, Vista } from '@/components/agenda/Calendario'
 import { ModuloAppuntamento, type AperturaModulo, type AppuntamentoCompleto } from '@/components/agenda/ModuloAppuntamento'
 import { useAvvisi } from '@/components/Avvisi'
+import { useConferma } from '@/components/Conferma'
 import { nomeCliente } from '@/components/clienti'
 import { Caricamento, Interruttore, Pulsante, TitoloPagina } from '@/components/ui'
 import { messaggioErrore } from '@/lib/errori'
@@ -26,6 +27,7 @@ const STATI_TUTTI: StatoAppuntamento[] = [...STATI_VISIBILI, 'disdetto', 'rifiut
 
 export default function PaginaAgenda() {
   const avvisi = useAvvisi()
+  const conferma = useConferma()
   const [orari, setOrari] = useState<Fascia[] | null>(null)
   const [servizi, setServizi] = useState<Servizio[]>([])
   const [intervallo, setIntervallo] = useState<{ inizio: DateTime; fine: DateTime } | null>(null)
@@ -123,9 +125,13 @@ export default function PaginaAgenda() {
       const esito = verificaOrario(inizio, fine, orari ?? [], chiusure)
       if (
         (esito.fuoriOrario || esito.chiusura) &&
-        !window.confirm(
-          `${esito.chiusura ? 'In quel momento risulti chiusa' : 'Il nuovo orario è fuori dal tuo orario di lavoro'}. Spostare comunque?`,
-        )
+        !(await conferma({
+          titolo: 'Spostare comunque?',
+          messaggio: esito.chiusura
+            ? 'In quel momento risulti chiusa.'
+            : 'Il nuovo orario è fuori dal tuo orario di lavoro.',
+          conferma: 'Sposta',
+        }))
       ) {
         return annulla()
       }
@@ -141,7 +147,7 @@ export default function PaginaAgenda() {
       avvisi.successo(`Spostato alle ${oraBreve(inizio)}`)
       void caricaPeriodo()
     },
-    [appuntamenti, orari, chiusure, avvisi, caricaPeriodo],
+    [appuntamenti, orari, chiusure, avvisi, caricaPeriodo, conferma],
   )
 
   return (

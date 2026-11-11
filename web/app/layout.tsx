@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { FornitoreAvvisi } from '@/components/Avvisi'
+import { FornitoreConferma } from '@/components/Conferma'
 import { FornitoreSessione } from '@/lib/sessione'
 import './globals.css'
 
@@ -21,7 +22,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="it">
       <body className="min-h-dvh antialiased">
         <FornitoreAvvisi>
-          <FornitoreSessione>{children}</FornitoreSessione>
+          <FornitoreConferma>
+            <FornitoreSessione>{children}</FornitoreSessione>
+          </FornitoreConferma>
         </FornitoreAvvisi>
       </body>
     </html>

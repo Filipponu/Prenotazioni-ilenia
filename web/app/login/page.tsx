@@ -5,15 +5,16 @@ import { useEffect, useState } from 'react'
 import { useAvvisi } from '@/components/Avvisi'
 import { Campo, Pulsante, Scheda, Voce } from '@/components/ui'
 import { useSessione } from '@/lib/sessione'
-import { configurazioneMancante, supabase } from '@/lib/supabase'
+import { EMAIL_DEMO, PASSWORD_DEMO } from '@/lib/demo/dati'
+import { configurazioneMancante, modalitaDemo, supabase } from '@/lib/supabase'
 
 export default function Login() {
   const { sessione, recuperoPassword, fineRecuperoPassword } = useSessione()
   const router = useRouter()
   const avvisi = useAvvisi()
   const [modo, setModo] = useState<'accesso' | 'dimenticata'>('accesso')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState(modalitaDemo ? EMAIL_DEMO : '')
+  const [password, setPassword] = useState(modalitaDemo ? PASSWORD_DEMO : '')
   const [nuovaPassword, setNuovaPassword] = useState('')
   const [errore, setErrore] = useState<string | null>(null)
   const [inCorso, setInCorso] = useState(false)
@@ -76,6 +77,11 @@ export default function Login() {
         <h1 className="text-3xl font-semibold tracking-tight text-stone-900">Ilenia</h1>
       </div>
 
+      {modalitaDemo ? (
+        <p className="mb-4 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-200">
+          <strong>Versione dimostrativa:</strong> i dati di accesso sono già inseriti, premi <strong>Accedi</strong>.
+        </p>
+      ) : null}
       <Scheda>
         {configurazioneMancante ? (
           <p className="text-sm text-red-700">

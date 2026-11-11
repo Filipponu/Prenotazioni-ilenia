@@ -4,6 +4,7 @@ import type { ChiusuraDb } from '@ilenia/shared/tipi-db'
 import { dataBreve, dataLunga, daDataOra, daIso, minutiDaOra, nomeGiorno, oraBreve, versoIso, adesso } from '@ilenia/shared/tempo'
 import { useCallback, useEffect, useState } from 'react'
 import { useAvvisi } from '@/components/Avvisi'
+import { useConferma } from '@/components/Conferma'
 import { Finestra } from '@/components/Finestra'
 import { Caricamento, Campo, Interruttore, Pulsante, Scheda, TitoloPagina, Voce, Vuoto } from '@/components/ui'
 import { messaggioErrore } from '@/lib/errori'
@@ -220,6 +221,7 @@ function descriviChiusura(c: ChiusuraDb): string {
 function Chiusure() {
   const operatrice = useOperatrice()
   const avvisi = useAvvisi()
+  const conferma = useConferma()
   const [chiusure, setChiusure] = useState<ChiusuraDb[] | null>(null)
   const [modulo, setModulo] = useState<ModuloChiusura | null>(null)
   const [errore, setErrore] = useState<string | null>(null)
@@ -298,7 +300,8 @@ function Chiusure() {
   }
 
   async function elimina(c: ChiusuraDb) {
-    if (!window.confirm(`Eliminare la chiusura ${descriviChiusura(c)}?`)) return
+    if (!(await conferma({ titolo: 'Eliminare la chiusura?', messaggio: descriviChiusura(c), conferma: 'Elimina', pericolo: true })))
+      return
     const { error } = await supabase().from('chiusure').delete().eq('id', c.id)
     if (error) avvisi.errore(messaggioErrore(error))
     else {
