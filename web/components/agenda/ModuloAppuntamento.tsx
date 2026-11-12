@@ -2,7 +2,7 @@
 
 import { verificaOrario, type Fascia } from '@ilenia/shared/orari'
 import { dataIso, dataLunga, daDataOra, daIso, durataLeggibile, oraBreve, versoIso } from '@ilenia/shared/tempo'
-import type { Appuntamento, Cliente, Servizio, StatoAppuntamento } from '@ilenia/shared/tipi-db'
+import type { Appuntamento, Cliente, EsitoPromemoria, Servizio, StatoAppuntamento } from '@ilenia/shared/tipi-db'
 import type { DateTime } from 'luxon'
 import { useState } from 'react'
 import { disdici, ErroreInvio } from '@/lib/api'
@@ -16,6 +16,16 @@ import { nomeCliente, SelettoreCliente } from '../clienti'
 import { AzioniRichiesta, EtichettaFinestra, useFinestra } from '../richieste/AzioniRichiesta'
 import { Finestra } from '../Finestra'
 import { AreaTesto, Campo, Etichetta, Interruttore, Pulsante, Scelta, Voce } from '../ui'
+
+/** Com'è andato il promemoria del giorno prima. */
+const PROMEMORIA: Record<EsitoPromemoria, { testo: string; colore: 'neutro' | 'ambra' | 'verde' | 'rosso' }> = {
+  whatsapp: { testo: 'Promemoria inviato su WhatsApp (gratis)', colore: 'verde' },
+  template: { testo: 'Promemoria inviato con template (a pagamento)', colore: 'ambra' },
+  email: { testo: 'Promemoria inviato via email', colore: 'verde' },
+  senza_contatto: { testo: 'Promemoria non inviato: manca il contatto', colore: 'neutro' },
+  non_necessario: { testo: 'Prenotato all\'ultimo: niente promemoria', colore: 'neutro' },
+  errore: { testo: 'Promemoria non riuscito', colore: 'rosso' },
+}
 
 export type AppuntamentoCompleto = Appuntamento & {
   clienti: Cliente | null
@@ -246,6 +256,9 @@ export function ModuloAppuntamento({
               {esistente.origine === 'whatsapp' ? 'Prenotato su WhatsApp' : esistente.origine === 'anticipo' ? 'Anticipato dalla lista d\'attesa' : 'Inserito dal pannello'}
             </span>
             {esistente.conferma_via_template ? <Etichetta colore="ambra">Conferma inviata con template (a pagamento)</Etichetta> : null}
+            {esistente.promemoria_esito ? (
+              <Etichetta colore={PROMEMORIA[esistente.promemoria_esito].colore}>{PROMEMORIA[esistente.promemoria_esito].testo}</Etichetta>
+            ) : null}
           </div>
         ) : null}
 

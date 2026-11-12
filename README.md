@@ -1,11 +1,11 @@
 # Prenotazioni Ilenia
 
-Gestione delle prenotazioni per Ilenia (parrucchiera): pannello web installabile (PWA) e,
-dalle prossime fasi, bot WhatsApp sull'**API Cloud ufficiale di Meta**.
+Gestione delle prenotazioni per Ilenia (parrucchiera): pannello web installabile (PWA) con
+notifiche push e bot WhatsApp sull'**API Cloud ufficiale di Meta**.
 Obiettivo: costo di gestione vicino a zero e nessun rischio di ban del numero.
 
 - Piano approvato: [`docs/PIANO.md`](docs/PIANO.md)
-- Come provare: [Fase 1](docs/test-fase-1.md) · [Fase 2](docs/test-fase-2.md) · [Fase 3](docs/test-fase-3.md) · [Fase 4](docs/test-fase-4.md)
+- Come provare: [Fase 1](docs/test-fase-1.md) · [Fase 2](docs/test-fase-2.md) · [Fase 3](docs/test-fase-3.md) · [Fase 4](docs/test-fase-4.md) · [Fase 5](docs/test-fase-5.md)
 
 ## Stato
 
@@ -15,7 +15,7 @@ Obiettivo: costo di gestione vicino a zero e nessun rischio di ban del numero.
 | 2 | Webhook WhatsApp e bot di prenotazione (numero di test Meta) | ✅ pronta (provata con messaggi simulati; manca l'account Meta) |
 | 3 | Approvazione manuale/automatica, disdette e spostamenti | ✅ pronta (provata con messaggi simulati) |
 | 4 | Lista d'attesa (automatica e manuale) | ✅ pronta (provata con messaggi simulati) |
-| 5 | PWA installabile, notifiche push, promemoria | — |
+| 5 | PWA installabile, notifiche push, promemoria | ✅ pronta (push provate nel browser; mancano chiavi e sito pubblicato) |
 | 6 | Deploy e guida per la SIM su Meta Business | — |
 
 ## Struttura
@@ -25,9 +25,12 @@ supabase/migrations/   schema, funzioni, regole di accesso (RLS)
 supabase/tests/        test SQL su un Postgres usa e getta (npm run test:db)
 shared/                codice comune: fuso Europe/Rome, telefoni, orari liberi, messaggi WhatsApp,
                        motore del bot, tipi del database, Supabase finto della demo
-web/                   pannello Next.js esportato come file statici (+ demo in un solo file)
-worker/                Worker Cloudflare: webhook WhatsApp, bot, file statici del pannello
-strumenti/             prove nel browser, Supabase finto in locale, simulatore di messaggi WhatsApp
+web/                   pannello Next.js esportato come file statici (+ demo in un solo file),
+                       manifest, icone e service worker (web/public)
+worker/                Worker Cloudflare: webhook WhatsApp, bot, notifiche, promemoria (cron),
+                       file statici del pannello
+strumenti/             prove nel browser, Supabase finto in locale, simulatore di messaggi WhatsApp,
+                       chiavi VAPID, icone
 docs/                  piano e guide
 ```
 

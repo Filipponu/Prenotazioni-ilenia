@@ -83,7 +83,7 @@ describe('lavoro programmato ogni minuto', () => {
     const prima = datiDemo().proposte_anticipo!.at(-1)!
     await app.request(`/r/${prima.id}`, {}, env, contesto)
     prima.scade_il = new Date(Date.now() - 60_000).toISOString()
-    expect(await lavoroProgrammato(env, dipendenze)).toBe(1)
+    expect((await lavoroProgrammato(env, dipendenze)).scadute).toBe(1)
     expect(prima.stato).toBe('scaduta')
   })
 })

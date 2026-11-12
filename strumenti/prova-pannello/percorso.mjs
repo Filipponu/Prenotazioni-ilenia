@@ -268,6 +268,94 @@ await page.getByRole('button', { name: 'Salva', exact: true }).click()
 await avviso(page, 'Impostazioni salvate')
 await page.screenshot({ path: FOTO + '11-impostazioni.png', fullPage: true })
 
+// ------------------------------------------------------------- app installabile e notifiche
+passo('PWA: manifest, icone e service worker')
+const pwa = await page.evaluate(async () => {
+  const href = document.querySelector('link[rel="manifest"]')?.getAttribute('href')
+  const m = await (await fetch(href)).json()
+  const icone = await Promise.all([...m.icons.map((i) => i.src), '/icone/badge-96.png', '/icone/apple-touch-icon.png'].map(async (src) => (await fetch(src)).status))
+  const sw = await Promise.race([navigator.serviceWorker.ready.then((r) => r.active?.scriptURL), new Promise((r) => setTimeout(() => r('timeout'), 8000))])
+  return { nome: m.name, avvio: m.start_url, icone, sw }
+})
+if (pwa.nome !== 'Prenotazioni Ilenia' || pwa.avvio !== '/agenda/' || pwa.icone.some((x) => x !== 200) || !String(pwa.sw).endsWith('/sw.js')) {
+  errori.push('PWA: ' + JSON.stringify(pwa))
+}
+
+passo('notifiche: attiva, prova, ricevi una push, disattiva')
+// la versione "headless shell" di Chromium nega sempre le notifiche: serve quella completa
+const browserPush = await chromium.launch({ channel: 'chromium' })
+const ctxPush = await browserPush.newContext({ locale: 'it-IT', timezoneId: 'Europe/Rome', viewport: { width: 1280, height: 860 }, permissions: ['notifications'] })
+// il servizio push di Google non è raggiungibile da qui: abbonamento finto, stesso formato del browser
+await ctxPush.addInitScript(() => {
+  const finta = {
+    endpoint: 'https://push.example.com/prova-1',
+    toJSON() {
+      return { endpoint: this.endpoint, keys: { p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', auth: 'BTBZMqHH6r4Tts7J_aSIgg' } }
+    },
+    async unsubscribe() {
+      localStorage.removeItem('finta-sott')
+      return true
+    },
+  }
+  PushManager.prototype.getSubscription = async () => (localStorage.getItem('finta-sott') ? finta : null)
+  PushManager.prototype.subscribe = async (o) => {
+    if (!o?.applicationServerKey || !o.userVisibleOnly) throw new Error('opzioni di abbonamento sbagliate')
+    localStorage.setItem('finta-sott', '1')
+    return finta
+  }
+})
+const pp = await ctxPush.newPage()
+pp.on('pageerror', (e) => errori.push('pagina (push): ' + e.message))
+await pp.route('**/api/pannello/push/prova', (r) => r.fulfill({ json: { arrivate: 1 } }))
+await pp.goto(BASE + '/login/')
+await pp.getByLabel('Email').fill('ilenia@example.com')
+await pp.getByLabel('Password').fill('prova1234')
+await pp.getByRole('button', { name: 'Accedi' }).click()
+await pp.waitForURL('**/agenda/')
+await pp.goto(BASE + '/impostazioni/')
+await pp.getByRole('button', { name: 'Attiva le notifiche' }).click()
+await avviso(pp, 'Notifiche attivate')
+await pp.getByText('Attive', { exact: true }).waitFor()
+const iscrizioni = await (await fetch('http://127.0.0.1:54321/rest/v1/push_iscrizioni?select=endpoint,operatrice_id')).json()
+if (iscrizioni.length !== 1 || iscrizioni[0].endpoint !== 'https://push.example.com/prova-1') errori.push('iscrizione push non salvata: ' + JSON.stringify(iscrizioni))
+await pp.getByRole('button', { name: 'Manda una prova' }).click()
+await avviso(pp, 'Notifica di prova inviata (1 dispositivo)')
+await senzaAvvisi(pp)
+await pp.getByRole('heading', { name: 'App e notifiche' }).scrollIntoViewIfNeeded()
+await pp.screenshot({ path: FOTO + '15-notifiche-attive.png' })
+
+// una push vera recapitata al service worker (come se arrivasse da Google/Apple)
+const cdp = await ctxPush.newCDPSession(pp)
+const idRegistrazione = new Promise((ok) =>
+  cdp.on('ServiceWorker.workerRegistrationUpdated', (e) => {
+    const r = e.registrations.find((x) => x.scopeURL.startsWith(BASE) && !x.isDeleted)
+    if (r) ok(r.registrationId)
+  }),
+)
+await cdp.send('ServiceWorker.enable')
+await cdp.send('ServiceWorker.deliverPushMessage', {
+  origin: BASE,
+  registrationId: await idRegistrazione,
+  data: JSON.stringify({ titolo: 'Nuova richiesta da approvare', testo: 'Maria Bianchi: Piega, giovedì alle 10:00', url: '/richieste/' }),
+})
+const mostrate = await pp.evaluate(async () => {
+  const reg = await navigator.serviceWorker.ready
+  for (let i = 0; i < 40; i++) {
+    const n = await reg.getNotifications()
+    if (n.length) return n.map((x) => ({ titolo: x.title, testo: x.body, url: x.data?.url }))
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  return []
+})
+if (mostrate[0]?.titolo !== 'Nuova richiesta da approvare' || mostrate[0]?.url !== '/richieste/') errori.push('notifica push non mostrata: ' + JSON.stringify(mostrate))
+
+await pp.getByRole('button', { name: 'Disattiva' }).click()
+await avviso(pp, 'Notifiche disattivate')
+await pp.getByRole('button', { name: 'Attiva le notifiche' }).waitFor()
+const dopo = await (await fetch('http://127.0.0.1:54321/rest/v1/push_iscrizioni?select=endpoint')).json()
+if (dopo.length !== 0) errori.push('iscrizione push non cancellata')
+await browserPush.close()
+
 // ------------------------------------------------------------- telefono
 passo('telefono: agenda giorno')
 const tel = await nuovaPagina({ ...devices['iPhone 13'] })
@@ -288,6 +376,13 @@ await tel.getByRole('button', { name: 'Altro' }).click()
 await tel.locator('dialog[open]').getByRole('link', { name: 'Servizi' }).click()
 await tel.getByText('Colore + piega').waitFor()
 await tel.screenshot({ path: FOTO + '14-telefono-servizi.png' })
+
+passo('telefono (iPhone): istruzioni per installare l\'app')
+await tel.getByRole('button', { name: 'Altro' }).click()
+await tel.locator('dialog[open]').getByRole('link', { name: 'Impostazioni' }).click()
+await tel.getByText('Aggiungi alla schermata Home').waitFor()
+await tel.getByRole('heading', { name: 'App e notifiche' }).scrollIntoViewIfNeeded()
+await tel.screenshot({ path: FOTO + '16-telefono-installa.png' })
 
 await browser.close()
 console.log(errori.length ? '\nPROBLEMI:\n' + errori.join('\n') : '\nNessun problema.')

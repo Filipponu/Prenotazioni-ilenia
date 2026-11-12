@@ -32,11 +32,14 @@ sleep 1
 ANON="$(sed -n 's/.*ANON=//p' "$TMP/finto.log")"
 [ -n "$ANON" ] || { cat "$TMP/finto.log"; echo "Finto Supabase non partito"; exit 1; }
 
+VAPID="$(node "$RADICE/strumenti/genera-chiavi-vapid.mjs" | sed -n 's/^NEXT_PUBLIC_VAPID_PUBLIC_KEY=//p')"
+
 echo "→ compilo il pannello"
 (
   cd "$RADICE/web"
   NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON" \
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY="$VAPID" \
   npx next build > "$TMP/build.log" 2>&1 || { cat "$TMP/build.log"; exit 1; }
   cp -r out "$TMP/out"
   rm -rf out .next

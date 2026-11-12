@@ -19,6 +19,8 @@ import {
   type ContestoAzioni,
   type EsitoInvio,
 } from '@ilenia/shared/bot/azioni'
+import { inviaPromemoria } from '@ilenia/shared/bot/promemoria'
+import { adesso, daIso } from '@ilenia/shared/tempo'
 import { modalitaDemo, supabase } from './supabase'
 
 export type { EsitoInvio, EsitoRisposta, MessaggioManuale }
@@ -129,6 +131,35 @@ export function disdici(operatriceId: string, appuntamentoId: string, proponi: b
     () => disdiciDalPannello(contestoDemo(), operatriceId, appuntamentoId, proponi),
     () => chiamaApi<{ proposto: boolean }>(`/appuntamenti/${appuntamentoId}/disdici`, { proponi }),
   )
+}
+
+/** Notifica di prova su tutti i dispositivi dell'operatrice; restituisce quanti l'hanno ricevuta. */
+export async function provaNotifica(): Promise<number> {
+  const { arrivate } = await chiamaApi<{ arrivate: number }>('/push/prova')
+  return arrivate
+}
+
+/**
+ * Solo demo: manda subito i promemoria del primo giorno (da domani) che ha
+ * appuntamenti confermati ancora senza promemoria. Nel sito vero li manda il
+ * Worker ogni sera all'orario impostato.
+ */
+export async function promemoriaDemo(): Promise<{ inviati: number; saltati: number; giorno: string | null }> {
+  const sb = supabase()
+  const { data } = await sb
+    .from('appuntamenti')
+    .select('inizio')
+    .eq('stato', 'confermato')
+    .is('promemoria_inviato_il', null)
+    .gte('inizio', adesso().plus({ days: 1 }).startOf('day').toISO()!)
+    .order('inizio')
+    .limit(1)
+  const primo = data?.[0]
+  if (!primo) return { inviati: 0, saltati: 0, giorno: null }
+  const giorno = daIso(primo.inizio).startOf('day')
+  const esito = await inviaPromemoria({ ...contestoDemo(), email: async () => undefined }, { forza: true, giorno })
+  aggiornaContatori()
+  return { ...esito, giorno: giorno.toISO() }
 }
 
 /** Solo demo: le scadenze che nel sito vero gestisce il Worker ogni minuto. */

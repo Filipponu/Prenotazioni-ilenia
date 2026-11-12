@@ -52,6 +52,7 @@ type Stato =
   | 'prenota_giorno'
   | 'prenota_ora'
   | 'prenota_nome'
+  | 'prenota_email'
   | 'prenota_riepilogo'
   | 'chiedi_anticipo'
   | 'sposta_scegli'
@@ -256,6 +257,7 @@ class Turno {
 
     if (c.tipo === 'testo') {
       if (stato === 'prenota_nome') return this.nome(testo, dati)
+      if (stato === 'prenota_email') return this.email(testo, dati)
       const t = normalizza(testo)
       if (/(^|\s)prenot/.test(t)) return this.mostraServizi()
       if (/(^|\s)spost/.test(t)) return this.iniziaSposta()
@@ -319,6 +321,9 @@ class Turno {
         if (valore === 'cambia') return this.mostraGiorni(prodotto, { sposta: dati.spostaId })
         return dati.spostaId ? this.eseguiSpostamento(dati.spostaId, dati.inizio) : this.conferma(prodotto, dati.inizio)
       }
+      case 'email':
+        if (stato !== 'prenota_email') return this.menu()
+        return this.vaiAlRiepilogo(dati)
       case 'anticipo':
         if (stato !== 'chiedi_anticipo' || !dati.appuntamentoId) return this.menu()
         return this.anticipo(valore === 'si', dati.appuntamentoId)
@@ -468,11 +473,38 @@ class Turno {
     const p = await this.parametri(servizio.durata_minuti, sposta)
     if (!slotLibero(inizio, p)) return this.mostraOre(servizio, dataIso(inizio), 0, { prefisso: T.slotPreso, sposta })
     if (sposta) return this.riepilogoSpostamento(servizio, sposta, inizio)
+    return this.dopoOrario(servizio, inizio)
+  }
+
+  /** Dopo la scelta dell'orario: nome (se manca), email (se servono i promemoria via email), riepilogo. */
+  private async dopoOrario(servizio: Prodotto, inizio: DateTime) {
+    const dati = { servizioId: servizio.id, inizio: versoIso(inizio) }
     if (!this.cliente.nome) {
       await this.invia({ tipo: 'testo', testo: T.chiediNome })
-      return this.salva('prenota_nome', { servizioId: servizio.id, inizio: versoIso(inizio) })
+      return this.salva('prenota_nome', dati)
+    }
+    if (this.imp.promemoria === 'email' && !this.cliente.email) {
+      await this.invia({ tipo: 'pulsanti', testo: T.chiediEmail, pulsanti: [{ id: 'email:salta', titolo: T.pulsanteSalta }] })
+      return this.salva('prenota_email', dati)
     }
     return this.riepilogo(servizio, inizio)
+  }
+
+  private async email(testo: string, dati: DatiConversazione) {
+    const email = testo.trim().toLowerCase()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email) || email.length > 120) {
+      await this.invia({ tipo: 'pulsanti', testo: T.emailNonValida, pulsanti: [{ id: 'email:salta', titolo: T.pulsanteSalta }] })
+      return this.salva('prenota_email', dati)
+    }
+    this.cliente = verifica(await this.db.from('clienti').update({ email }).eq('id', this.cliente.id).select('*').single())
+    return this.vaiAlRiepilogo(dati)
+  }
+
+  private async vaiAlRiepilogo(dati: DatiConversazione) {
+    if (!dati.servizioId || !dati.inizio) return this.menu()
+    const servizio = await this.servizio(dati.servizioId)
+    if (!servizio) return
+    return this.riepilogo(servizio, daIso(dati.inizio))
   }
 
   private async nome(testo: string, dati: DatiConversazione) {
@@ -487,7 +519,7 @@ class Turno {
     if (!dati.servizioId || !dati.inizio) return this.menu()
     const servizio = await this.servizio(dati.servizioId)
     if (!servizio) return
-    return this.riepilogo(servizio, daIso(dati.inizio))
+    return this.dopoOrario(servizio, daIso(dati.inizio))
   }
 
   private async riepilogo(servizio: Prodotto, inizio: DateTime) {

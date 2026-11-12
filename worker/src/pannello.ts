@@ -20,7 +20,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { Ambiente } from './ambiente'
 import type { Dipendenze } from './index'
-import { notificaIlenia } from './notifiche'
+import { creaNotificatore, inviaATutti } from './notifiche'
 
 type Variabili = { operatriceId: string; azioni: ContestoAzioni }
 
@@ -46,7 +46,7 @@ export function creaApiPannello(dipendenze: Dipendenze) {
       .maybeSingle()
     if (!operatrice) return c.json({ errore: 'Account non abilitato' }, 403)
     c.set('operatriceId', operatrice.id)
-    c.set('azioni', { db, canale: dipendenze.creaCanale(c.env), notifica: notificaIlenia })
+    c.set('azioni', { db, canale: dipendenze.creaCanale(c.env), notifica: creaNotificatore(c.env, db) })
     await next()
   })
 
@@ -65,6 +65,20 @@ export function creaApiPannello(dipendenze: Dipendenze) {
   api.post('/richieste/:id/rifiuta', async (c) => {
     const corpo = (await c.req.json().catch(() => ({}))) as { motivo?: string }
     return c.json(await rifiutaRichiesta(c.get('azioni'), c.get('operatriceId'), c.req.param('id'), corpo.motivo))
+  })
+
+  // --- notifiche: prova sui dispositivi dell'operatrice
+  api.post('/push/prova', async (c) => {
+    if (!c.env.VAPID_PUBLIC_KEY || !c.env.VAPID_PRIVATE_KEY) {
+      return c.json({ errore: 'Notifiche non configurate sul server (chiavi VAPID mancanti).' }, 503)
+    }
+    const arrivate = await inviaATutti(
+      c.env,
+      c.get('azioni').db,
+      { titolo: 'Notifiche attive', testo: 'Da ora ti avviso qui per le nuove richieste.', url: `${c.env.APP_URL ?? ''}/richieste/`, tag: 'prova' },
+      c.get('operatriceId'),
+    )
+    return c.json({ arrivate })
   })
 
   // --- lista d'attesa

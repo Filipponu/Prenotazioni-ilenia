@@ -332,3 +332,15 @@ set role authenticated;
 select set_config('request.jwt.claims', '{"sub": "11111111-1111-1111-1111-111111111111"}', false);
 select test.ok((select fatturati from public.contatore_messaggi_mensile) = 1, 'contatore: 1 messaggio fatturato da Meta');
 reset role;
+
+-- Fase 5: esito del promemoria
+select test.errore(
+  format($q$update public.appuntamenti set promemoria_esito = 'piccione' where id = %L$q$, :'app_adiacente'),
+  '23514', 'esito del promemoria non valido rifiutato');
+update public.appuntamenti set promemoria_esito = 'template', promemoria_inviato_il = now() where id = :'app_adiacente';
+select test.ok((select promemoria_esito from public.appuntamenti where id = :'app_adiacente') = 'template', 'esito del promemoria salvato');
+update public.appuntamenti set note = 'nota' where id = :'app_adiacente';
+select test.ok((select promemoria_esito from public.appuntamenti where id = :'app_adiacente') = 'template', 'promemoria non toccato se cambia solo la nota');
+update public.appuntamenti set inizio = inizio + interval '7 days', fine = fine + interval '7 days' where id = :'app_adiacente';
+select test.ok((select promemoria_esito is null and promemoria_inviato_il is null from public.appuntamenti where id = :'app_adiacente'),
+  'promemoria azzerato se l''appuntamento viene spostato');

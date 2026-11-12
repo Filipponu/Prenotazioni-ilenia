@@ -265,6 +265,7 @@ export function creaDatiDemo(): DbDemo {
       motivo_rifiuto: null,
       conferma_via_template: false,
       promemoria_inviato_il: null,
+      promemoria_esito: null,
       creato_il: versoIso(inizio.minus({ days: 6 })),
       aggiornato_il: versoIso(inizio.minus({ days: 6 })),
     }

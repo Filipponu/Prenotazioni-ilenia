@@ -2,13 +2,16 @@
 
 import type { ContatoreMessaggiMensile, Impostazioni } from '@ilenia/shared/tipi-db'
 import { normalizzaTelefono, formattaTelefono } from '@ilenia/shared/telefono'
+import { daIso, dataLunga } from '@ilenia/shared/tempo'
 import { DateTime } from 'luxon'
 import { useEffect, useState } from 'react'
 import { useAvvisi } from '@/components/Avvisi'
+import { AppENotifiche } from '@/components/impostazioni/AppENotifiche'
 import { Caricamento, Campo, cx, Pulsante, Scelta, Scheda, TitoloPagina, Voce } from '@/components/ui'
 import { messaggioErrore } from '@/lib/errori'
 import { useOperatrice, useSessione } from '@/lib/sessione'
-import { supabase } from '@/lib/supabase'
+import { promemoriaDemo } from '@/lib/api'
+import { modalitaDemo, supabase } from '@/lib/supabase'
 
 /** Risposte libere gratuite al mese per numero (regole Meta dal 1/10/2026) */
 const SOGLIA_GRATUITA = 1000
@@ -41,6 +44,9 @@ export default function PaginaImpostazioni() {
   const [contatore, setContatore] = useState<ContatoreMessaggiMensile | null | undefined>(undefined)
   const [numeroBot, setNumeroBot] = useState('')
   const [inCorso, setInCorso] = useState(false)
+  /** promemoria come salvato nel database (il pulsante della demo usa quello) */
+  const [promemoriaSalvato, setPromemoriaSalvato] = useState<Impostazioni['promemoria']>('disattivato')
+  const [provaPromemoria, setProvaPromemoria] = useState(false)
 
   useEffect(() => {
     const sb = supabase()
@@ -52,6 +58,7 @@ export default function PaginaImpostazioni() {
       if (i.error) avvisi.errore(messaggioErrore(i.error))
       else {
         setImp(i.data)
+        setPromemoriaSalvato(i.data.promemoria)
         setNumeroBot(formattaTelefono(i.data.numero_whatsapp))
       }
       setContatore(c.data ?? null)
@@ -92,7 +99,25 @@ export default function PaginaImpostazioni() {
       return
     }
     if (risultati[1]?.data) aggiornaOperatrice(risultati[1].data)
+    setPromemoriaSalvato(imp.promemoria)
     avvisi.successo('Impostazioni salvate')
+  }
+
+  async function inviaPromemoriaDemo() {
+    setProvaPromemoria(true)
+    try {
+      const r = await promemoriaDemo()
+      if (!r.giorno) avvisi.errore('Nessun appuntamento confermato nei prossimi giorni senza promemoria.')
+      else {
+        const quando = dataLunga(daIso(r.giorno))
+        const dove = promemoriaSalvato === 'email' ? 'Email simulate' : 'Messaggi visibili in «Prova il bot»'
+        avvisi.successo(`Promemoria per ${quando}: ${r.inviati} inviati, ${r.saltati} senza contatto o non necessari. ${dove}; l'esito è in Agenda.`)
+      }
+    } catch (e) {
+      avvisi.errore(messaggioErrore(e))
+    } finally {
+      setProvaPromemoria(false)
+    }
   }
 
   if (!imp) return <Caricamento />
@@ -109,6 +134,8 @@ export default function PaginaImpostazioni() {
       />
 
       <div className="grid gap-5 lg:grid-cols-2">
+        <AppENotifiche />
+
         <Scheda>
           <h2 className="mb-4 text-lg font-semibold">Messaggi WhatsApp del mese</h2>
           <Contatore contatore={contatore} />
@@ -131,7 +158,10 @@ export default function PaginaImpostazioni() {
                 />
               )}
             </Voce>
-            <Voce etichetta="Email per le notifiche di riserva" aiuto="Se le notifiche push non funzionano, ti avvisiamo qui.">
+            <Voce
+              etichetta="Email per le notifiche di riserva"
+              aiuto="Se nessun dispositivo riceve le notifiche, ti scriviamo qui per nuove richieste, «operatore» e posti da proporre."
+            >
               {(id) => (
                 <Campo
                   id={id}
@@ -146,7 +176,7 @@ export default function PaginaImpostazioni() {
 
         <Scheda>
           <h2 className="text-lg font-semibold">Prenotazioni su WhatsApp</h2>
-          <p className="mb-4 text-sm text-stone-500">Il bot arriverà nella Fase 2: intanto puoi già scegliere come deve comportarsi.</p>
+          <p className="mb-4 text-sm text-stone-500">Come si comporta il bot con le clienti.</p>
           <div className="flex flex-col gap-4">
             <SceltaRadio
               etichetta="Approvazione delle richieste"
@@ -291,7 +321,9 @@ export default function PaginaImpostazioni() {
 
         <Scheda>
           <h2 className="text-lg font-semibold">Promemoria del giorno prima</h2>
-          <p className="mb-4 text-sm text-stone-500">Attivi dalla Fase 5.</p>
+          <p className="mb-4 text-sm text-stone-500">
+            Alle clienti con un appuntamento confermato per il giorno dopo. Chi ha prenotato da meno di 2 ore non lo riceve.
+          </p>
           <div className="flex flex-col gap-4">
             <SceltaRadio
               etichetta="Invio"
@@ -299,8 +331,8 @@ export default function PaginaImpostazioni() {
               onCambia={(v) => cambia('promemoria', v)}
               opzioni={[
                 ['disattivato', 'Disattivato', 'Nessun promemoria.'],
-                ['email', 'Email (gratis)', 'Solo alle clienti con l\'email in anagrafica.'],
-                ['template', 'WhatsApp (a pagamento)', 'Template WhatsApp; gratis se la cliente ti ha scritto nelle ultime 24 ore.'],
+                ['email', 'Email (gratis)', 'Solo alle clienti con l\'email in anagrafica: il bot la chiede quando prenotano.'],
+                ['template', 'WhatsApp (a pagamento)', 'Template WhatsApp (pochi centesimi l\'uno); gratis se la cliente ti ha scritto nelle ultime 24 ore.'],
               ]}
             />
             <Voce etichetta="Orario di invio" className="max-w-40">
@@ -314,6 +346,23 @@ export default function PaginaImpostazioni() {
                 />
               )}
             </Voce>
+            {modalitaDemo ? (
+              <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+                <p className="mb-2">
+                  Demo: invece di aspettare l&apos;orario, manda subito i promemoria del prossimo giorno con appuntamenti
+                  {promemoriaSalvato === 'disattivato' ? ' (prima scegli Email o WhatsApp e salva)' : ''}.
+                </p>
+                <Pulsante
+                  piccolo
+                  variante="secondario"
+                  disabled={promemoriaSalvato === 'disattivato'}
+                  inCorso={provaPromemoria}
+                  onClick={() => void inviaPromemoriaDemo()}
+                >
+                  Invia ora i promemoria
+                </Pulsante>
+              </div>
+            ) : null}
           </div>
         </Scheda>
 

@@ -7,3 +7,13 @@ WHATSAPP_VERIFY_TOKEN=una-parola-segreta-a-scelta
 WHATSAPP_MODALITA=simulata
 # WHATSAPP_TOKEN=
 # WHATSAPP_PHONE_NUMBER_ID=
+
+# Notifiche push (node strumenti/genera-chiavi-vapid.mjs)
+# APP_URL=http://localhost:8787
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=
+# VAPID_SUBJECT=mailto:tua-email@example.com
+
+# Email (Resend): riserva per Ilenia e promemoria via email
+# RESEND_API_KEY=
+# RESEND_FROM=Salone Ilenia <prenotazioni@tuodominio.it>

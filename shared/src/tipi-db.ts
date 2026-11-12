@@ -27,6 +27,7 @@ type Tabella<Row, K extends keyof Row, R extends unknown[]> = {
   Relationships: R
 }
 
+export type EsitoPromemoria = 'whatsapp' | 'template' | 'email' | 'senza_contatto' | 'non_necessario' | 'errore'
 export type StatoAppuntamento = 'in_attesa' | 'confermato' | 'rifiutato' | 'disdetto' | 'completato'
 export type OrigineAppuntamento = 'whatsapp' | 'pannello' | 'anticipo'
 export type ModalitaApprovazione = 'manuale' | 'automatica'
@@ -104,6 +105,7 @@ export type Appuntamento = {
   motivo_rifiuto: string | null
   conferma_via_template: boolean
   promemoria_inviato_il: string | null
+  promemoria_esito: EsitoPromemoria | null
   creato_il: string
   aggiornato_il: string
 }

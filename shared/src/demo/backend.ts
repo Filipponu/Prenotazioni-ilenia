@@ -404,6 +404,7 @@ export async function fetchDemo(input: RequestInfo | URL, init?: RequestInit): P
           motivo_rifiuto: null,
           conferma_via_template: false,
           promemoria_inviato_il: null,
+          promemoria_esito: null,
         },
         chiusure: { motivo: null },
         conversazioni: { stato: 'menu', contesto: {}, ultimo_messaggio_cliente_il: null, bot_in_pausa_fino_al: null },
@@ -437,7 +438,12 @@ export async function fetchDemo(input: RequestInfo | URL, init?: RequestInit): P
     if (metodo === 'PATCH') {
       const colpite = tabella.filter(corrisponde)
       for (const r of colpite) verifica(nome, { ...r, ...(corpo as Riga) }, r.id)
-      for (const r of colpite) Object.assign(r, corpo, { aggiornato_il: adessoIso })
+      for (const r of colpite) {
+        const c = corpo as Riga
+        // come il trigger appuntamenti_azzera_promemoria
+        const spostato = nome === 'appuntamenti' && 'inizio' in c && Date.parse(String(c.inizio)) !== Date.parse(String(r.inizio))
+        Object.assign(r, c, { aggiornato_il: adessoIso }, spostato ? { promemoria_inviato_il: null, promemoria_esito: null } : {})
+      }
       salva()
       if (!rappresentazione) return risposta(204)
       const out = colpite.map((r) => proietta(r, select))

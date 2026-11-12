@@ -16,10 +16,12 @@
     "WHATSAPP_MODALITA": "reale",
     "WHATSAPP_GRAPH_VERSION": "v24.0"
   },
-  // ogni minuto: scadenze della lista d'attesa (il piano gratuito ammette fino a 5 cron)
+  // ogni minuto: scadenze della lista d'attesa e promemoria (il piano gratuito ammette fino a 5 cron)
   "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true }
   // Segreti (mai qui dentro): wrangler secret put <NOME>
   //   SUPABASE_URL, SUPABASE_SECRET_KEY,
-  //   WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN
+  //   WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN,
+  //   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, APP_URL,
+  //   RESEND_API_KEY, RESEND_FROM
 }

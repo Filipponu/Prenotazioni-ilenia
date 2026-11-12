@@ -26,12 +26,13 @@ const db = {
   }],
   servizi: [], orari_settimanali: [], chiusure: [], clienti: [], appuntamenti: [],
   contatore_messaggi_mensile: [], log_messaggi: [],
-  conversazioni: [], lista_attesa: [], proposte_anticipo: [], slot_liberati: [],
+  conversazioni: [], lista_attesa: [], proposte_anticipo: [], slot_liberati: [], push_iscrizioni: [],
 }
 const DEFAULT = {
   servizi: { attivo: true, ordine: 0, prezzo: null },
   clienti: { nome: null, telefono: null, email: null, note: null },
-  appuntamenti: { stato: 'in_attesa', origine: 'pannello', note: null, servizio_id: null, motivo_rifiuto: null, conferma_via_template: false, promemoria_inviato_il: null },
+  appuntamenti: { stato: 'in_attesa', origine: 'pannello', note: null, servizio_id: null, motivo_rifiuto: null, conferma_via_template: false, promemoria_inviato_il: null, promemoria_esito: null },
+  push_iscrizioni: { user_agent: null },
   chiusure: { motivo: null },
 }
 const FK = { clienti: 'cliente_id', servizi: 'servizio_id', operatrici: 'operatrice_id' }

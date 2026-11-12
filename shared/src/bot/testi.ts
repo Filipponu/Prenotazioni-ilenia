@@ -108,6 +108,21 @@ export const TESTI = {
   anticipoPreso: (quando: string) =>
     `Mi dispiace, quel posto è appena stato preso. Il tuo appuntamento resta ${quando}.`,
   anticipoNonTrovato: 'Non trovo questa proposta: forse è già stata gestita.',
+
+  // --- email (solo se i promemoria sono via email)
+  chiediEmail: 'Vuoi il promemoria via email il giorno prima? Scrivi il tuo indirizzo email, oppure tocca «Salta».',
+  pulsanteSalta: 'Salta',
+  emailNonValida: 'Non sembra un indirizzo email valido. Riprova, oppure tocca «Salta».',
+
+  // --- promemoria del giorno prima
+  promemoria: (servizio: string, quando: string, telefono: string | null) =>
+    `Ciao! Ti ricordo il tuo appuntamento: ${servizio}, ${quando}. Ti aspettiamo!` +
+    (telefono ? `\nPer un imprevisto chiama il salone al ${telefono}.` : ''),
+  oggettoEmailPromemoria: (quando: string) => `Promemoria appuntamento: ${quando}`,
+  emailPromemoria: (nome: string, operatrice: string, servizio: string, quando: string, telefono: string | null) =>
+    `Ciao${nome ? ` ${nome}` : ''},\n\nti ricordo il tuo appuntamento da ${operatrice}: ${servizio}, ${quando}.\n` +
+    (telefono ? `Per un imprevisto chiama il salone al ${telefono}.\n` : '') +
+    `\nA presto!\n${operatrice}`,
 } as const
 
 /** Template da far approvare a Meta (vedi guida Fase 6). */
@@ -116,5 +131,7 @@ export const TEMPLATE = {
   conferma: 'conferma_appuntamento',
   /** {{1}} nome, {{2}} servizio, {{3}} nuovo giorno e ora, {{4}} appuntamento attuale, {{5}} minuti; pulsanti Accetto / No grazie */
   anticipo: 'proposta_anticipo',
+  /** {{1}} nome, {{2}} servizio, {{3}} giorno e ora */
+  promemoria: 'promemoria_appuntamento',
   lingua: 'it',
 } as const

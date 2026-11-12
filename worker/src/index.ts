@@ -9,10 +9,11 @@
  * - GET  /r/:id                 lista d'attesa manuale: segna la proposta come
  *                               inviata e apre WhatsApp col messaggio pronto
  * - GET  /api/salute            controllo che il Worker sia vivo
- * - ogni minuto (cron)          scadenze delle proposte della lista d'attesa
+ * - ogni minuto (cron)          scadenze della lista d'attesa e promemoria del giorno prima
  * - tutto il resto: file statici del pannello (web/out)
  */
 import { elaboraScadenze, inviaPropostaManuale } from '@ilenia/shared/bot/anticipo'
+import { inviaPromemoria } from '@ilenia/shared/bot/promemoria'
 import { gestisciEvento, type ContestoBot, type Db } from '@ilenia/shared/bot/motore'
 import type { Database } from '@ilenia/shared/tipi-db'
 import { firmaValida } from '@ilenia/shared/whatsapp/firma'
@@ -21,7 +22,8 @@ import { createClient } from '@supabase/supabase-js'
 import { Hono } from 'hono'
 import type { Ambiente } from './ambiente'
 import { creaCanale, type CanaleWorker } from './meta'
-import { notificaIlenia } from './notifiche'
+import { inviaEmail } from './email'
+import { creaNotificatore } from './notifiche'
 import { creaApiPannello } from './pannello'
 
 export interface Dipendenze {
@@ -84,25 +86,30 @@ export function creaApp(dipendenze: Dipendenze = predefinite) {
   return app
 }
 
-/** Lavoro programmato ogni minuto: proposte della lista d'attesa senza risposta. */
+/** Lavoro programmato ogni minuto: scadenze della lista d'attesa e promemoria. */
 export async function lavoroProgrammato(env: Ambiente, dipendenze: Dipendenze = predefinite) {
-  const gestite = await elaboraScadenze({
-    db: dipendenze.creaDb(env),
-    canale: dipendenze.creaCanale(env),
-    notifica: notificaIlenia,
+  const db = dipendenze.creaDb(env)
+  const canale = dipendenze.creaCanale(env)
+  const scadute = await elaboraScadenze({ db, canale, notifica: creaNotificatore(env, db) })
+  if (scadute > 0) console.log(`Lista d'attesa: ${scadute} proposte scadute gestite`)
+  const promemoria = await inviaPromemoria({
+    db,
+    canale,
+    email: env.RESEND_API_KEY ? (a, oggetto, testo) => inviaEmail(env, a, oggetto, testo) : undefined,
   })
-  if (gestite > 0) console.log(`Lista d'attesa: ${gestite} proposte scadute gestite`)
-  return gestite
+  if (promemoria.inviati + promemoria.saltati > 0) console.log('Promemoria:', JSON.stringify(promemoria))
+  return { scadute, promemoria }
 }
 
 async function elabora(env: Ambiente, dipendenze: Dipendenze, eventi: EventoWhatsApp[]) {
   if (eventi.length === 0) return
   const canale = dipendenze.creaCanale(env)
+  const db = dipendenze.creaDb(env)
   const ctx: ContestoBot = {
-    db: dipendenze.creaDb(env),
+    db,
     canale,
     operatriceId: env.BOT_OPERATRICE_ID || null,
-    notifica: notificaIlenia,
+    notifica: creaNotificatore(env, db),
   }
   // uno alla volta, nell'ordine di arrivo
   for (const evento of eventi) {
