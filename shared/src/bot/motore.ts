@@ -7,11 +7,12 @@
  * È indipendente dall'ambiente: gira nel Worker Cloudflare (Supabase vero,
  * API di Meta) e nel simulatore della demo (dati finti, chat a schermo).
  *
- * Flusso di prenotazione:
- *   menu → servizio → giorno → orario → (nome) → riepilogo → conferma
- *        → «Se si libera un posto prima, vuoi essere avvisata?»
+ * Flussi:
+ *   Prenota: menu → servizio → giorno → orario → (nome) → riepilogo → conferma
+ *            → «Se si libera un posto prima, vuoi essere avvisata?»
+ *   Sposta:  menu → appuntamento → (limite ore) → giorno → orario → riepilogo → fatto
+ *   Disdici: menu → appuntamento → (limite ore) → conferma → fatto
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DateTime } from 'luxon'
 import { giorniLiberi, inOccupati, slotDelGiorno, slotLibero, type ParametriDisponibilita } from '../disponibilita'
 import {
@@ -26,32 +27,21 @@ import {
   prezzoLeggibile,
   versoIso,
 } from '../tempo'
-import type {
-  Cliente,
-  Conversazione,
-  Database,
-  Impostazioni,
-  Json,
-  Servizio,
-  StatoAppuntamento,
-  TipoMessaggio,
-} from '../tipi-db'
+import type { Cliente, Conversazione, Impostazioni, Json, Servizio, StatoAppuntamento, TipoMessaggio } from '../tipi-db'
 import type { MessaggioUscita, RigaLista } from '../whatsapp/messaggi'
 import type { ContenutoIngresso, EventoWhatsApp } from '../whatsapp/webhook'
+import { inviaERegistra, senzaErrori, verifica, verificaForse, type Canale, type Db } from './comune'
 import { TESTI as T } from './testi'
 
-export type Db = SupabaseClient<Database>
-
-/** Dove finiscono i messaggi del bot: API di Meta, simulatore, test. */
-export interface Canale {
-  invia(telefono: string, messaggio: MessaggioUscita): Promise<{ id: string | null }>
-}
+export type { Canale, Db } from './comune'
 
 /** Avvisi per Ilenia (in seguito: notifiche push / email). */
 export type Notifica =
   | { tipo: 'richiesta'; appuntamentoId: string; confermata: boolean; cliente: string; servizio: string; quando: string }
   | { tipo: 'operatore'; cliente: string; telefono: string }
   | { tipo: 'messaggio'; cliente: string; telefono: string; testo: string }
+  | { tipo: 'disdetta'; appuntamentoId: string; cliente: string; servizio: string; quando: string }
+  | { tipo: 'spostamento'; appuntamentoId: string; cliente: string; servizio: string; da: string; a: string }
 
 export interface ContestoBot {
   db: Db
@@ -71,6 +61,9 @@ type Stato =
   | 'prenota_nome'
   | 'prenota_riepilogo'
   | 'chiedi_anticipo'
+  | 'sposta_scegli'
+  | 'disdici_scegli'
+  | 'disdici_conferma'
   | 'operatore'
 
 interface DatiConversazione {
@@ -78,6 +71,8 @@ interface DatiConversazione {
   giorno?: string
   inizio?: string
   appuntamentoId?: string
+  /** appuntamento che si sta spostando (giorno/orario/riepilogo servono allo spostamento) */
+  spostaId?: string
   /** ultimo aggiornamento scritto dal bot (per la scadenza) */
   agg?: string
 }
@@ -86,25 +81,18 @@ interface DatiConversazione {
 const SCADENZA_MINUTI = 30
 const STATI_ATTIVI: StatoAppuntamento[] = ['in_attesa', 'confermato']
 
-type Risultato = { data: unknown; error: { message: string; code?: string } | null }
+/** Ciò che si prenota o si sposta: un servizio, o la durata di un appuntamento esistente. */
+type Prodotto = Pick<Servizio, 'id' | 'nome' | 'durata_minuti'>
 
-/** Risultato di una query che deve restituire dati (errore altrimenti). */
-function verifica<R extends Risultato>(r: R): NonNullable<R['data']> {
-  if (r.error) throw Object.assign(new Error(r.error.message), { code: r.error.code })
-  if (r.data === null || r.data === undefined) throw new Error('Nessun dato restituito')
-  return r.data as NonNullable<R['data']>
+interface AppuntamentoCliente {
+  id: string
+  inizio: string
+  fine: string
+  stato: StatoAppuntamento
+  servizio_id: string | null
+  servizi: { nome: string } | null
 }
 
-/** Risultato di .maybeSingle(): può essere null. */
-function verificaForse<R extends Risultato>(r: R): R['data'] {
-  if (r.error) throw Object.assign(new Error(r.error.message), { code: r.error.code })
-  return r.data
-}
-
-/** Risultato di update/insert senza dati richiesti indietro. */
-function senzaErrori(r: { error: { message: string; code?: string } | null }): void {
-  if (r.error) throw Object.assign(new Error(r.error.message), { code: r.error.code })
-}
 
 function normalizza(testo: string): string {
   return testo.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
@@ -264,8 +252,8 @@ class Turno {
       if (stato === 'prenota_nome') return this.nome(testo, dati)
       const t = normalizza(testo)
       if (/(^|\s)prenot/.test(t)) return this.mostraServizi()
-      if (/(^|\s)spost/.test(t)) return this.inArrivo('spostare')
-      if (/(^|\s)(disdi|annull)/.test(t)) return this.inArrivo('disdire')
+      if (/(^|\s)spost/.test(t)) return this.iniziaSposta()
+      if (/(^|\s)(disdi|annull)/.test(t)) return this.iniziaDisdici()
     }
 
     // qualunque altra cosa: menu iniziale
@@ -279,9 +267,16 @@ class Turno {
     switch (chiave) {
       case 'menu':
         if (valore === 'prenota') return this.mostraServizi()
-        if (valore === 'sposta') return this.inArrivo('spostare')
-        if (valore === 'disdici') return this.inArrivo('disdire')
+        if (valore === 'sposta') return this.iniziaSposta()
+        if (valore === 'disdici') return this.iniziaDisdici()
         return this.menu()
+      case 'app-sposta':
+        return this.sposta(valore)
+      case 'app-disdici':
+        return this.chiediDisdetta(valore)
+      case 'disdetta':
+        if (stato !== 'disdici_conferma' || !dati.appuntamentoId) return this.menu()
+        return valore === 'si' ? this.disdici(dati.appuntamentoId) : this.annullaDisdetta()
       case 'srv-pag':
         return this.mostraServizi(Number(valore) || 0)
       case 'srv': {
@@ -293,25 +288,30 @@ class Turno {
       case 'ore-pag':
       case 'cambia-giorno':
       case 'ora': {
-        if (!dati.servizioId) return this.mostraServizi()
-        const servizio = await this.servizio(dati.servizioId)
-        if (!servizio) return
-        if (chiave === 'giorni-da') return this.mostraGiorni(servizio, valore)
-        if (chiave === 'cambia-giorno') return this.mostraGiorni(servizio)
-        if (chiave === 'giorno') return this.mostraOre(servizio, valore, 0)
-        if (chiave === 'ore-pag') return this.mostraOre(servizio, dati.giorno ?? '', Number(valore) || 0)
-        return this.scegliOra(servizio, valore)
+        if (!dati.spostaId && !dati.servizioId) return this.mostraServizi()
+        const prodotto = dati.spostaId
+          ? await this.prodottoDaSpostare(dati.spostaId)
+          : await this.servizio(dati.servizioId ?? '')
+        if (!prodotto) return
+        const sposta = dati.spostaId
+        if (chiave === 'giorni-da') return this.mostraGiorni(prodotto, { dal: valore, sposta })
+        if (chiave === 'cambia-giorno') return this.mostraGiorni(prodotto, { sposta })
+        if (chiave === 'giorno') return this.mostraOre(prodotto, valore, 0, { sposta })
+        if (chiave === 'ore-pag') return this.mostraOre(prodotto, dati.giorno ?? '', Number(valore) || 0, { sposta })
+        return this.scegliOra(prodotto, valore, sposta)
       }
       case 'conferma': {
-        if (stato !== 'prenota_riepilogo' || !dati.servizioId || !dati.inizio) return this.menu()
+        if (stato !== 'prenota_riepilogo' || !dati.inizio || (!dati.servizioId && !dati.spostaId)) return this.menu()
         if (valore === 'annulla') {
-          await this.invia({ tipo: 'testo', testo: T.annullata })
+          await this.invia({ tipo: 'testo', testo: dati.spostaId ? T.spostamentoAnnullato : T.annullata })
           return this.salva('menu', {})
         }
-        const servizio = await this.servizio(dati.servizioId)
-        if (!servizio) return
-        if (valore === 'cambia') return this.mostraGiorni(servizio)
-        return this.conferma(servizio, dati.inizio)
+        const prodotto = dati.spostaId
+          ? await this.prodottoDaSpostare(dati.spostaId)
+          : await this.servizio(dati.servizioId ?? '')
+        if (!prodotto) return
+        if (valore === 'cambia') return this.mostraGiorni(prodotto, { sposta: dati.spostaId })
+        return dati.spostaId ? this.eseguiSpostamento(dati.spostaId, dati.inizio) : this.conferma(prodotto, dati.inizio)
       }
       case 'anticipo':
         if (stato !== 'chiedi_anticipo' || !dati.appuntamentoId) return this.menu()
@@ -337,13 +337,6 @@ class Turno {
     await this.salva('menu', {})
   }
 
-  private async inArrivo(azione: string) {
-    await this.invia({
-      tipo: 'testo',
-      testo: T.funzioneInArrivo(azione, this.operatrice.nome, this.imp.parola_operatore),
-    })
-    await this.salva('menu', {})
-  }
 
   private async operatore() {
     const fino = this.ora.plus({ hours: this.imp.ore_pausa_operatore })
@@ -395,8 +388,9 @@ class Turno {
     await this.salva('prenota_servizio', {})
   }
 
-  private async mostraGiorni(servizio: Servizio, dal?: string, prefisso?: string) {
-    const p = await this.parametri(servizio.durata_minuti)
+  private async mostraGiorni(servizio: Prodotto, opz: { dal?: string; prefisso?: string; sposta?: string } = {}) {
+    const { dal, prefisso, sposta } = opz
+    const p = await this.parametri(servizio.durata_minuti, sposta)
     const { giorni, altri } = giorniLiberi(p, 9, dal ? daDataOra(dal, '00:00') : undefined)
     if (giorni.length === 0) {
       await this.invia({
@@ -421,19 +415,25 @@ class Turno {
       pulsante: T.pulsanteGiorni,
       righe,
     })
-    await this.salva('prenota_giorno', { servizioId: servizio.id })
+    await this.salva('prenota_giorno', { servizioId: servizio.id, spostaId: sposta })
   }
 
-  private async mostraOre(servizio: Servizio, giorno: string, pagina: number, prefisso?: string) {
+  private async mostraOre(
+    servizio: Prodotto,
+    giorno: string,
+    pagina: number,
+    opz: { prefisso?: string; sposta?: string } = {},
+  ) {
+    const { prefisso, sposta } = opz
     let inizioGiorno: DateTime
     try {
       inizioGiorno = daDataOra(giorno, '00:00')
     } catch {
-      return this.mostraGiorni(servizio)
+      return this.mostraGiorni(servizio, { sposta })
     }
-    const p = await this.parametri(servizio.durata_minuti)
+    const p = await this.parametri(servizio.durata_minuti, sposta)
     const slot = slotDelGiorno(inizioGiorno, p)
-    if (slot.length === 0) return this.mostraGiorni(servizio, undefined, T.giornoPieno)
+    if (slot.length === 0) return this.mostraGiorni(servizio, { prefisso: T.giornoPieno, sposta })
 
     // 10 righe al massimo: orari + eventuale «Altri orari» + «Cambia giorno»
     const da = pagina * 8
@@ -449,18 +449,19 @@ class Turno {
 
     const testo = T.sceltaOra(dataLunga(inizioGiorno))
     await this.invia({ tipo: 'lista', testo: prefisso ? `${prefisso}\n\n${testo}` : testo, pulsante: T.pulsanteOre, righe })
-    await this.salva('prenota_ora', { servizioId: servizio.id, giorno })
+    await this.salva('prenota_ora', { servizioId: servizio.id, giorno, spostaId: sposta })
   }
 
-  private async scegliOra(servizio: Servizio, valore: string) {
+  private async scegliOra(servizio: Prodotto, valore: string, sposta?: string) {
     let inizio: DateTime
     try {
       inizio = daIso(valore)
     } catch {
-      return this.mostraGiorni(servizio)
+      return this.mostraGiorni(servizio, { sposta })
     }
-    const p = await this.parametri(servizio.durata_minuti)
-    if (!slotLibero(inizio, p)) return this.mostraOre(servizio, dataIso(inizio), 0, T.slotPreso)
+    const p = await this.parametri(servizio.durata_minuti, sposta)
+    if (!slotLibero(inizio, p)) return this.mostraOre(servizio, dataIso(inizio), 0, { prefisso: T.slotPreso, sposta })
+    if (sposta) return this.riepilogoSpostamento(servizio, sposta, inizio)
     if (!this.cliente.nome) {
       await this.invia({ tipo: 'testo', testo: T.chiediNome })
       return this.salva('prenota_nome', { servizioId: servizio.id, inizio: versoIso(inizio) })
@@ -483,7 +484,7 @@ class Turno {
     return this.riepilogo(servizio, daIso(dati.inizio))
   }
 
-  private async riepilogo(servizio: Servizio, inizio: DateTime) {
+  private async riepilogo(servizio: Prodotto, inizio: DateTime) {
     await this.invia({
       tipo: 'pulsanti',
       testo: T.riepilogo(servizio.nome, durataLeggibile(servizio.durata_minuti), dataOraLunga(inizio), this.nomeCliente),
@@ -496,10 +497,10 @@ class Turno {
     await this.salva('prenota_riepilogo', { servizioId: servizio.id, inizio: versoIso(inizio) })
   }
 
-  private async conferma(servizio: Servizio, inizioIso: string) {
+  private async conferma(servizio: Prodotto, inizioIso: string) {
     const inizio = daIso(inizioIso)
     const p = await this.parametri(servizio.durata_minuti)
-    if (!slotLibero(inizio, p)) return this.mostraOre(servizio, dataIso(inizio), 0, T.slotPreso)
+    if (!slotLibero(inizio, p)) return this.mostraOre(servizio, dataIso(inizio), 0, { prefisso: T.slotPreso })
 
     const automatica = this.imp.approvazione === 'automatica'
     const inserito = await this.db
@@ -516,7 +517,7 @@ class Turno {
       .select('id')
       .single()
     // il vincolo del database ha l'ultima parola: qualcun altro è arrivato prima
-    if (inserito.error?.code === '23P01') return this.mostraOre(servizio, dataIso(inizio), 0, T.slotPreso)
+    if (inserito.error?.code === '23P01') return this.mostraOre(servizio, dataIso(inizio), 0, { prefisso: T.slotPreso })
     const { id } = verifica(inserito)
 
     const quando = dataOraLunga(inizio)
@@ -558,8 +559,220 @@ class Turno {
     await this.salva('menu', {})
   }
 
+  // ----- sposta e disdici
+  private async appuntamentiFuturi(): Promise<AppuntamentoCliente[]> {
+    return verifica(
+      await this.db
+        .from('appuntamenti')
+        .select('id, inizio, fine, stato, servizio_id, servizi(nome)')
+        .eq('cliente_id', this.cliente.id)
+        .eq('operatrice_id', this.operatrice.id)
+        .in('stato', STATI_ATTIVI)
+        .gt('inizio', versoIso(this.ora))
+        .order('inizio')
+        .limit(10),
+    )
+  }
+
+  private async appuntamento(id: string): Promise<AppuntamentoCliente | null> {
+    const a = verificaForse(
+      await this.db
+        .from('appuntamenti')
+        .select('id, inizio, fine, stato, servizio_id, servizi(nome)')
+        .eq('id', id)
+        .eq('cliente_id', this.cliente.id)
+        .eq('operatrice_id', this.operatrice.id)
+        .maybeSingle(),
+    )
+    if (!a || !STATI_ATTIVI.includes(a.stato) || Date.parse(a.inizio) <= this.ora.toMillis()) return null
+    return a
+  }
+
+  /** true se l'appuntamento è ancora oltre il limite di ore per modificarlo. */
+  private modificabile(a: AppuntamentoCliente): boolean {
+    return Date.parse(a.inizio) - this.ora.toMillis() >= this.imp.ore_limite_modifica * 3_600_000
+  }
+
+  private async rispostaTroppoTardi() {
+    await this.invia({
+      tipo: 'testo',
+      testo: T.troppoTardi(
+        this.imp.ore_limite_modifica,
+        this.imp.telefono_salone,
+        this.operatrice.nome,
+        this.imp.parola_operatore,
+      ),
+    })
+    await this.salva('menu', {})
+  }
+
+  private async nonDisponibile() {
+    await this.invia({ tipo: 'testo', testo: T.appuntamentoNonDisponibile })
+    await this.salva('menu', {})
+  }
+
+  /** Lista degli appuntamenti futuri da cui scegliere (o salta se ce n'è uno solo). */
+  private async scegliAppuntamento(azione: 'sposta' | 'disdici') {
+    const futuri = await this.appuntamentiFuturi()
+    if (futuri.length === 0) {
+      await this.invia({ tipo: 'testo', testo: T.nessunAppuntamento })
+      return this.salva('menu', {})
+    }
+    if (futuri.length === 1) return azione === 'sposta' ? this.sposta(futuri[0]!.id) : this.chiediDisdetta(futuri[0]!.id)
+    await this.invia({
+      tipo: 'lista',
+      testo: azione === 'sposta' ? T.sceltaAppuntamentoSposta : T.sceltaAppuntamentoDisdici,
+      pulsante: T.pulsanteAppuntamenti,
+      righe: futuri.map((a) => {
+        const inizio = daIso(a.inizio)
+        return {
+          id: `app-${azione}:${a.id}`,
+          titolo: `${maiuscolaIniziale(inizio.toFormat('ccc d LLL'))} ${oraBreve(inizio)}`,
+          descrizione: [a.servizi?.nome, a.stato === 'in_attesa' ? T.inAttesaDiConferma : null].filter(Boolean).join(' · '),
+        }
+      }),
+    })
+    await this.salva(azione === 'sposta' ? 'sposta_scegli' : 'disdici_scegli', {})
+  }
+
+  private iniziaSposta() {
+    return this.scegliAppuntamento('sposta')
+  }
+
+  private iniziaDisdici() {
+    return this.scegliAppuntamento('disdici')
+  }
+
+  private prodottoDi(a: AppuntamentoCliente): Prodotto {
+    return {
+      id: a.servizio_id ?? '',
+      nome: a.servizi?.nome ?? 'Appuntamento',
+      durata_minuti: Math.round((Date.parse(a.fine) - Date.parse(a.inizio)) / 60_000),
+    }
+  }
+
+  /** L'appuntamento da spostare, se è ancora spostabile (altrimenti risponde e restituisce null). */
+  private async prodottoDaSpostare(id: string): Promise<Prodotto | null> {
+    const a = await this.appuntamento(id)
+    if (!a) {
+      await this.nonDisponibile()
+      return null
+    }
+    if (!this.modificabile(a)) {
+      await this.rispostaTroppoTardi()
+      return null
+    }
+    return this.prodottoDi(a)
+  }
+
+  private async sposta(id: string) {
+    const a = await this.appuntamento(id)
+    if (!a) return this.nonDisponibile()
+    if (!this.modificabile(a)) return this.rispostaTroppoTardi()
+    const prodotto = this.prodottoDi(a)
+    return this.mostraGiorni(prodotto, {
+      sposta: a.id,
+      prefisso: T.introSposta(prodotto.nome, dataOraLunga(daIso(a.inizio))),
+    })
+  }
+
+  private async riepilogoSpostamento(prodotto: Prodotto, spostaId: string, nuovo: DateTime) {
+    const a = await this.appuntamento(spostaId)
+    if (!a) return this.nonDisponibile()
+    await this.invia({
+      tipo: 'pulsanti',
+      testo: T.riepilogoSposta(prodotto.nome, dataOraLunga(daIso(a.inizio)), dataOraLunga(nuovo)),
+      pulsanti: [
+        { id: 'conferma:si', titolo: T.pulsanteConferma },
+        { id: 'conferma:cambia', titolo: T.pulsanteCambiaOrario },
+        { id: 'conferma:annulla', titolo: T.pulsanteAnnulla },
+      ],
+    })
+    await this.salva('prenota_riepilogo', { servizioId: prodotto.id, inizio: versoIso(nuovo), spostaId })
+  }
+
+  private async eseguiSpostamento(spostaId: string, inizioIso: string) {
+    const a = await this.appuntamento(spostaId)
+    if (!a) return this.nonDisponibile()
+    if (!this.modificabile(a)) return this.rispostaTroppoTardi()
+    const prodotto = this.prodottoDi(a)
+    const nuovo = daIso(inizioIso)
+    const p = await this.parametri(prodotto.durata_minuti, spostaId)
+    if (!slotLibero(nuovo, p)) {
+      return this.mostraOre(prodotto, dataIso(nuovo), 0, { prefisso: T.slotPreso, sposta: spostaId })
+    }
+    const aggiornato = await this.db
+      .from('appuntamenti')
+      .update({ inizio: versoIso(nuovo), fine: versoIso(nuovo.plus({ minutes: prodotto.durata_minuti })) })
+      .eq('id', spostaId)
+      .in('stato', STATI_ATTIVI)
+      .select('id')
+    if (aggiornato.error?.code === '23P01') {
+      return this.mostraOre(prodotto, dataIso(nuovo), 0, { prefisso: T.slotPreso, sposta: spostaId })
+    }
+    if (verifica(aggiornato).length === 0) return this.nonDisponibile()
+
+    const da = dataOraLunga(daIso(a.inizio))
+    const quando = dataOraLunga(nuovo)
+    await this.invia({
+      tipo: 'testo',
+      testo: T.spostato(prodotto.nome, quando, a.stato === 'in_attesa', this.operatrice.nome),
+    })
+    await this.ctx.notifica?.({
+      tipo: 'spostamento',
+      appuntamentoId: spostaId,
+      cliente: this.nomeCliente,
+      servizio: prodotto.nome,
+      da,
+      a: quando,
+    })
+    // Fase 4: il posto lasciato libero andrà proposto alla lista d'attesa
+    await this.salva('menu', {})
+  }
+
+  private async chiediDisdetta(id: string) {
+    const a = await this.appuntamento(id)
+    if (!a) return this.nonDisponibile()
+    if (!this.modificabile(a)) return this.rispostaTroppoTardi()
+    await this.invia({
+      tipo: 'pulsanti',
+      testo: T.domandaDisdetta(a.servizi?.nome ?? 'l\'appuntamento', dataOraLunga(daIso(a.inizio))),
+      pulsanti: [
+        { id: 'disdetta:si', titolo: T.pulsanteSiDisdici },
+        { id: 'disdetta:no', titolo: T.pulsanteNoTieni },
+      ],
+    })
+    await this.salva('disdici_conferma', { appuntamentoId: a.id })
+  }
+
+  private async disdici(id: string) {
+    const a = await this.appuntamento(id)
+    if (!a) return this.nonDisponibile()
+    if (!this.modificabile(a)) return this.rispostaTroppoTardi()
+    const aggiornato = verifica(
+      await this.db.from('appuntamenti').update({ stato: 'disdetto' }).eq('id', id).in('stato', STATI_ATTIVI).select('id'),
+    )
+    if (aggiornato.length === 0) return this.nonDisponibile()
+    senzaErrori(await this.db.from('lista_attesa').update({ attiva: false }).eq('appuntamento_id', id))
+    await this.invia({ tipo: 'testo', testo: T.disdetto })
+    await this.ctx.notifica?.({
+      tipo: 'disdetta',
+      appuntamentoId: id,
+      cliente: this.nomeCliente,
+      servizio: a.servizi?.nome ?? 'Appuntamento',
+      quando: dataOraLunga(daIso(a.inizio)),
+    })
+    // Fase 4: il posto lasciato libero andrà proposto alla lista d'attesa
+    await this.salva('menu', {})
+  }
+
+  private async annullaDisdetta() {
+    await this.invia({ tipo: 'testo', testo: T.disdettaAnnullata })
+    await this.salva('menu', {})
+  }
+
   // ----- supporto
-  private async parametri(durataMinuti: number): Promise<ParametriDisponibilita> {
+  private async parametri(durataMinuti: number, escludiId?: string): Promise<ParametriDisponibilita> {
     const da = versoIso(this.ora)
     const a = versoIso(this.ora.plus({ days: this.imp.giorni_prenotabili + 1 }))
     const op = this.operatrice.id
@@ -567,7 +780,7 @@ class Turno {
       this.db.from('orari_settimanali').select('giorno, ora_inizio, ora_fine').eq('operatrice_id', op),
       this.db
         .from('appuntamenti')
-        .select('inizio, fine')
+        .select('id, inizio, fine')
         .eq('operatrice_id', op)
         .in('stato', STATI_ATTIVI)
         .lt('inizio', a)
@@ -588,7 +801,8 @@ class Turno {
       giorniPrenotabili: this.imp.giorni_prenotabili,
       orari: verifica(orari),
       occupati: [
-        ...inOccupati(verifica(appuntamenti)),
+        // durante uno spostamento, il posto attuale della cliente conta come libero
+        ...inOccupati(verifica(appuntamenti).filter((a) => a.id !== escludiId)),
         ...inOccupati(verifica(chiusure)),
         ...inOccupati(verifica(proposte).map((x) => ({ inizio: x.nuovo_inizio, fine: x.nuova_fine }))),
       ],
@@ -596,16 +810,7 @@ class Turno {
   }
 
   private async invia(m: MessaggioUscita) {
-    const { id } = await this.ctx.canale.invia(this.telefono, m)
-    await this.db.from('log_messaggi').insert({
-      direzione: 'out',
-      cliente_id: this.cliente.id,
-      telefono: this.telefono,
-      wa_message_id: id,
-      tipo: m.tipo === 'testo' ? 'testo' : m.tipo === 'template' ? 'template' : 'interattivo',
-      costo: m.tipo === 'template' ? 'template' : 'libero',
-      contenuto: m as unknown as Json,
-    })
+    await inviaERegistra(this.db, this.ctx.canale, { clienteId: this.cliente.id, telefono: this.telefono }, m)
   }
 
   private async salva(stato: Stato, dati: DatiConversazione) {

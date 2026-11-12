@@ -8,8 +8,8 @@
  */
 import { chiaveSettimana, creaDatiDemo, EMAIL_DEMO, ID_OPERATRICE, ID_UTENTE, PASSWORD_DEMO, type DbDemo, type Riga } from './dati'
 
-const CHIAVE_DATI = 'ilenia-demo-dati-v2'
-const CHIAVE_SETTIMANA = 'ilenia-demo-settimana-v2'
+const CHIAVE_DATI = 'ilenia-demo-dati-v3'
+const CHIAVE_SETTIMANA = 'ilenia-demo-settimana-v3'
 
 // caricati alla prima richiesta (non all'import, che avviene anche durante la build)
 let db: DbDemo = {}

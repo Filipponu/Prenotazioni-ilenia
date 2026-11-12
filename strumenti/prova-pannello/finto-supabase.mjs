@@ -26,6 +26,7 @@ const db = {
   }],
   servizi: [], orari_settimanali: [], chiusure: [], clienti: [], appuntamenti: [],
   contatore_messaggi_mensile: [], log_messaggi: [],
+  conversazioni: [], lista_attesa: [], proposte_anticipo: [], slot_liberati: [],
 }
 const DEFAULT = {
   servizi: { attivo: true, ordine: 0, prezzo: null },

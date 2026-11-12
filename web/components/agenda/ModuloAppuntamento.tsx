@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase'
 import { useAvvisi } from '../Avvisi'
 import { useConferma } from '../Conferma'
 import { nomeCliente, SelettoreCliente } from '../clienti'
+import { AzioniRichiesta, EtichettaFinestra, useFinestra } from '../richieste/AzioniRichiesta'
 import { Finestra } from '../Finestra'
 import { AreaTesto, Campo, Etichetta, Pulsante, Scelta, Voce } from '../ui'
 
@@ -82,6 +83,7 @@ export function ModuloAppuntamento({
   const [inCorso, setInCorso] = useState(false)
 
   const esistente = apertura.tipo === 'modifica' ? apertura.appuntamento : null
+  const finestra = useFinestra(esistente?.stato === 'in_attesa' ? esistente.cliente_id : null)
   const serviziScelta = servizi.filter((x) => x.attivo || x.id === s.servizioId)
 
   function aggiorna(parziale: Partial<Stato>) {
@@ -235,6 +237,23 @@ export function ModuloAppuntamento({
             <span>
               {esistente.origine === 'whatsapp' ? 'Prenotato su WhatsApp' : esistente.origine === 'anticipo' ? 'Anticipato dalla lista d\'attesa' : 'Inserito dal pannello'}
             </span>
+            {esistente.conferma_via_template ? <Etichetta colore="ambra">Conferma inviata con template (a pagamento)</Etichetta> : null}
+          </div>
+        ) : null}
+
+        {esistente?.stato === 'in_attesa' ? (
+          <div className="flex flex-col gap-3 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-amber-900">Richiesta da approvare</p>
+              <EtichettaFinestra finestra={finestra} telefono={esistente.clienti?.telefono ?? null} />
+            </div>
+            <AzioniRichiesta
+              appuntamentoId={esistente.id}
+              cliente={nomeCliente(esistente.clienti)}
+              telefono={esistente.clienti?.telefono ?? null}
+              finestra={finestra}
+              onFatto={onSalvato}
+            />
           </div>
         ) : null}
 

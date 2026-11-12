@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { datiDemo, fetchDemo, impostaRitardoDemo, usaDatiDemo } from '../demo/backend'
 import type { DbDemo } from '../demo/dati'
-import { daDataOra } from '../tempo'
+import { daDataOra, versoIso } from '../tempo'
 import type { Database } from '../tipi-db'
 import type { MessaggioUscita } from '../whatsapp/messaggi'
 import type { ContenutoIngresso } from '../whatsapp/webhook'
@@ -329,15 +329,145 @@ describe('casi particolari', () => {
     expect(datiDemo().appuntamenti).toHaveLength(0)
   })
 
-  it('sposta e disdici: per ora rimandano a Ilenia (Fase 3)', async () => {
-    const r = await tocca(MARIA, 'menu:disdici')
-    expect(ultimo(r, 'testo').testo).toBe('Per disdire un appuntamento, per ora scrivi «operatore» e ti risponde Ilenia.')
-  })
-
   it('stato di consegna: aggiornato nel registro', async () => {
     await scrivi(MARIA, 'ciao')
     await gestisciEvento(ctx, { tipo: 'stato', id: 'wamid.out.1', stato: 'read', destinatario: MARIA, timestamp: 0, fatturazione: null, errore: null })
     expect(datiDemo().log_messaggi!.find((l) => l.wa_message_id === 'wamid.out.1')?.stato_consegna).toBe('read')
+  })
+})
+
+describe('sposta e disdici', () => {
+  function conAppuntamenti(...app: Array<{ id: string; quando: string; stato?: string; servizio?: string; cliente?: string }>) {
+    const d = datiDiProva()
+    d.appuntamenti = app.map((a) => {
+      const inizio = daDataOra(a.quando.slice(0, 10), a.quando.slice(11))
+      const durata = a.servizio === 'colore' ? 90 : 45
+      return {
+        id: a.id,
+        operatrice_id: OP,
+        cliente_id: a.cliente ?? 'c-giulia',
+        servizio_id: a.servizio ?? 'piega',
+        inizio: versoIso(inizio),
+        fine: versoIso(inizio.plus({ minutes: durata })),
+        stato: a.stato ?? 'confermato',
+        origine: 'whatsapp',
+      }
+    })
+    d.lista_attesa = [{ id: 'l1', appuntamento_id: app[0]!.id, cliente_id: 'c-giulia', operatrice_id: OP, attiva: true }]
+    usaDatiDemo(d)
+  }
+  const stato = (id: string) => datiDemo().appuntamenti!.find((a) => a.id === id)
+
+  it('disdici con un solo appuntamento: conferma e disdetta', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-19 10:00' })
+    let r = await tocca(GIULIA, 'menu:disdici')
+    const domanda = ultimo(r, 'pulsanti')
+    expect(domanda.testo).toBe('Confermi la disdetta di Piega di giovedì 19 novembre alle 10:00?')
+    expect(domanda.pulsanti.map((p) => p.titolo)).toEqual(['Sì, disdici', 'No, lo tengo'])
+    r = await tocca(GIULIA, 'disdetta:si')
+    expect(ultimo(r, 'testo').testo).toMatch(/^Appuntamento disdetto\./)
+    expect(stato('a1')?.stato).toBe('disdetto')
+    expect(datiDemo().lista_attesa![0]!.attiva).toBe(false)
+    expect(notifiche.at(-1)).toMatchObject({ tipo: 'disdetta', cliente: 'Giulia Verdi', quando: 'giovedì 19 novembre alle 10:00' })
+  })
+
+  it('disdici: «No, lo tengo» non cambia nulla', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-19 10:00' })
+    await tocca(GIULIA, 'menu:disdici')
+    const r = await tocca(GIULIA, 'disdetta:no')
+    expect(ultimo(r, 'testo').testo).toBe("Va bene, l'appuntamento resta in programma.")
+    expect(stato('a1')?.stato).toBe('confermato')
+  })
+
+  it('meno di 24 ore prima: rimanda al salone', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-17 09:00' })
+    ora = daDataOra('2026-11-16', '10:00') // mancano 23 ore
+    for (const azione of ['menu:disdici', 'menu:sposta']) {
+      const r = await tocca(GIULIA, azione)
+      expect(ultimo(r, 'testo').testo).toBe(
+        "Mancano meno di 24 ore all'appuntamento: per spostarlo o disdirlo contatta direttamente il salone al 0123 456789.",
+      )
+    }
+    expect(stato('a1')?.stato).toBe('confermato')
+  })
+
+  it('più appuntamenti: lista da cui scegliere', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-19 10:00' }, { id: 'a2', quando: '2026-11-24 15:00', stato: 'in_attesa', servizio: 'colore' })
+    let r = await scrivi(GIULIA, 'vorrei disdire')
+    const lista = ultimo(r, 'lista')
+    expect(lista.testo).toBe('Quale appuntamento vuoi disdire?')
+    expect(lista.righe).toEqual([
+      { id: 'app-disdici:a1', titolo: 'Gio 19 nov 10:00', descrizione: 'Piega' },
+      { id: 'app-disdici:a2', titolo: 'Mar 24 nov 15:00', descrizione: 'Colore · in attesa di conferma' },
+    ])
+    r = await tocca(GIULIA, 'app-disdici:a2')
+    expect(ultimo(r, 'pulsanti').testo).toBe('Confermi la disdetta di Colore di martedì 24 novembre alle 15:00?')
+  })
+
+  it('nessun appuntamento futuro', async () => {
+    const r = await tocca(GIULIA, 'menu:sposta')
+    expect(ultimo(r, 'testo').testo).toBe('Non hai appuntamenti in programma.')
+  })
+
+  it('sposta: il proprio orario conta come libero, poi conferma', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-19 10:00' })
+    let r = await tocca(GIULIA, 'menu:sposta')
+    const giorni = ultimo(r, 'lista')
+    expect(giorni.testo).toBe('Spostiamo Piega, ora fissato giovedì 19 novembre alle 10:00.\n\nPiega (45 min). Scegli il giorno:')
+
+    r = await tocca(GIULIA, 'giorno:2026-11-19')
+    const ore = ultimo(r, 'lista').righe.map((x) => x.titolo)
+    expect(ore).toContain('09:30') // si sovrapporrebbe al suo stesso appuntamento: va bene
+    expect(ore).toContain('10:00')
+
+    r = await tocca(GIULIA, 'ora:2026-11-19T11:00:00+01:00')
+    expect(ultimo(r, 'pulsanti').testo).toBe(
+      'Confermi lo spostamento?\n\nServizio: Piega\nDa: giovedì 19 novembre alle 10:00\nA: giovedì 19 novembre alle 11:00',
+    )
+    r = await tocca(GIULIA, 'conferma:si')
+    expect(ultimo(r, 'testo').testo).toBe('Fatto! Il tuo appuntamento per Piega è spostato a giovedì 19 novembre alle 11:00.')
+    expect(stato('a1')).toMatchObject({ inizio: '2026-11-19T11:00:00+01:00', fine: '2026-11-19T11:45:00+01:00', stato: 'confermato' })
+    expect(notifiche.at(-1)).toMatchObject({ tipo: 'spostamento', da: 'giovedì 19 novembre alle 10:00', a: 'giovedì 19 novembre alle 11:00' })
+  })
+
+  it('sposta una richiesta in attesa: resta in attesa', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-19 10:00', stato: 'in_attesa' })
+    await tocca(GIULIA, 'menu:sposta')
+    await tocca(GIULIA, 'ora:2026-11-24T09:00:00+01:00')
+    const r = await tocca(GIULIA, 'conferma:si')
+    expect(ultimo(r, 'testo').testo).toContain('La richiesta resta in attesa della conferma di Ilenia.')
+    expect(stato('a1')?.stato).toBe('in_attesa')
+  })
+
+  it('sposta su un orario preso nel frattempo: propone altri orari', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-19 10:00' })
+    await tocca(GIULIA, 'menu:sposta')
+    await tocca(GIULIA, 'ora:2026-11-24T09:00:00+01:00')
+    // Maria prenota proprio quell'orario
+    await tocca(MARIA, 'srv:piega')
+    await tocca(MARIA, 'ora:2026-11-24T09:00:00+01:00')
+    await scrivi(MARIA, 'Maria Rossi')
+    await tocca(MARIA, 'conferma:si')
+
+    const r = await tocca(GIULIA, 'conferma:si')
+    expect(ultimo(r, 'lista').testo).toContain("quell'orario è appena stato preso")
+    expect(stato('a1')?.inizio).toBe('2026-11-19T10:00:00+01:00')
+  })
+
+  it('annulla lo spostamento', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-19 10:00' })
+    await tocca(GIULIA, 'menu:sposta')
+    await tocca(GIULIA, 'ora:2026-11-24T09:00:00+01:00')
+    const r = await tocca(GIULIA, 'conferma:annulla')
+    expect(ultimo(r, 'testo').testo).toBe("Va bene, l'appuntamento resta com'era.")
+    expect(stato('a1')?.inizio).toBe('2026-11-19T10:00:00+01:00')
+  })
+
+  it('non si può toccare l\'appuntamento di un\'altra cliente', async () => {
+    conAppuntamenti({ id: 'a1', quando: '2026-11-19 10:00' })
+    const r = await tocca(MARIA, 'app-disdici:a1')
+    expect(ultimo(r, 'testo').testo).toBe("Quell'appuntamento non è più modificabile.")
+    expect(stato('a1')?.stato).toBe('confermato')
   })
 })
 

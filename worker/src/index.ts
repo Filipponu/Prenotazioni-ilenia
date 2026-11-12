@@ -4,6 +4,8 @@
  * - GET  /api/whatsapp/webhook  verifica dell'indirizzo da parte di Meta
  * - POST /api/whatsapp/webhook  messaggi e stati: firma controllata, risposta
  *                               immediata 200, elaborazione in background
+ * - POST /api/pannello/…        azioni del pannello che scrivono alle clienti
+ *                               (approva, rifiuta, rispondi): vedi pannello.ts
  * - GET  /api/salute            controllo che il Worker sia vivo
  * - tutto il resto: file statici del pannello (web/out)
  */
@@ -15,6 +17,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Hono } from 'hono'
 import type { Ambiente } from './ambiente'
 import { creaCanale, type CanaleWorker } from './meta'
+import { creaApiPannello } from './pannello'
 
 export interface Dipendenze {
   creaDb: (env: Ambiente) => Db
@@ -57,6 +60,8 @@ export function creaApp(dipendenze: Dipendenze = predefinite) {
     c.executionCtx.waitUntil(elabora(c.env, dipendenze, leggiWebhook(corpo)))
     return c.text('ok')
   })
+
+  app.route('/api/pannello', creaApiPannello(dipendenze))
 
   app.all('/api/*', (c) => c.json({ errore: 'Indirizzo non trovato' }, 404))
 

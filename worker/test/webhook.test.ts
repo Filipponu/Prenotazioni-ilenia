@@ -126,7 +126,7 @@ describe('messaggi in arrivo (POST)', () => {
     expect(inviati[0]!.m).toMatchObject({ tipo: 'pulsanti', testo: "Ciao! Sono l'assistente di Ilenia, cosa vuoi fare?" })
     // cliente nuova registrata col suo numero, messaggio nel registro
     expect(datiDemo().clienti!.some((c) => c.telefono === '393331234567')).toBe(true)
-    expect(datiDemo().log_messaggi!.map((l) => l.direzione)).toEqual(['in', 'out'])
+    expect(datiDemo().log_messaggi!.filter((l) => l.telefono === '393331234567').map((l) => l.direzione)).toEqual(['in', 'out'])
   })
 
   it('lo stesso messaggio rimandato da Meta non riceve una seconda risposta', async () => {

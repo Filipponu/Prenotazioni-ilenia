@@ -8,17 +8,22 @@ import LayoutPannello from '@/app/(pannello)/layout'
 import PaginaAgenda from '@/app/(pannello)/agenda/page'
 import PaginaClienti from '@/app/(pannello)/clienti/page'
 import PaginaImpostazioni from '@/app/(pannello)/impostazioni/page'
+import PaginaMessaggi from '@/app/(pannello)/messaggi/page'
 import PaginaOrari from '@/app/(pannello)/orari/page'
+import PaginaRichieste from '@/app/(pannello)/richieste/page'
 import PaginaServizi from '@/app/(pannello)/servizi/page'
 import PaginaWhatsApp from '@/app/(pannello)/whatsapp/page'
 import Login from '@/app/login/page'
 import Inizio from '@/app/page'
 import { FornitoreAvvisi } from '@/components/Avvisi'
 import { FornitoreConferma } from '@/components/Conferma'
+import { FornitoreLinkWhatsApp } from '@/components/LinkWhatsApp'
 import { FornitoreSessione } from '@/lib/sessione'
 
 const PAGINE: Record<string, () => React.JSX.Element> = {
   '/agenda/': PaginaAgenda,
+  '/richieste/': PaginaRichieste,
+  '/messaggi/': PaginaMessaggi,
   '/whatsapp/': PaginaWhatsApp,
   '/clienti/': PaginaClienti,
   '/servizi/': PaginaServizi,
@@ -43,9 +48,11 @@ if (radice) {
   createRoot(radice).render(
     <FornitoreAvvisi>
       <FornitoreConferma>
-        <FornitoreSessione>
-          <App />
-        </FornitoreSessione>
+        <FornitoreLinkWhatsApp>
+          <FornitoreSessione>
+            <App />
+          </FornitoreSessione>
+        </FornitoreLinkWhatsApp>
       </FornitoreConferma>
     </FornitoreAvvisi>,
   )

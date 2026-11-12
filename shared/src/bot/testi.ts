@@ -57,10 +57,44 @@ export const TESTI = {
   anticipoSi: 'Perfetto! Se si libera un posto prima ti scrivo io.',
   anticipoNo: 'Va bene! A presto.',
 
-  // --- in arrivo (Fase 3)
-  funzioneInArrivo: (azione: string, operatrice: string, parola: string) =>
-    `Per ${azione} un appuntamento, per ora scrivi «${parola}» e ti risponde ${operatrice}.`,
+  // --- sposta e disdici
+  nessunAppuntamento: 'Non hai appuntamenti in programma.',
+  sceltaAppuntamentoSposta: 'Quale appuntamento vuoi spostare?',
+  sceltaAppuntamentoDisdici: 'Quale appuntamento vuoi disdire?',
+  pulsanteAppuntamenti: "Scegli l'appuntamento",
+  inAttesaDiConferma: 'in attesa di conferma',
+  appuntamentoNonDisponibile: 'Quell\'appuntamento non è più modificabile.',
+  troppoTardi: (ore: number, telefono: string | null, operatrice: string, parola: string) =>
+    `Mancano meno di ${ore} ore all'appuntamento: per spostarlo o disdirlo ` +
+    (telefono ? `contatta direttamente il salone al ${telefono}.` : `scrivi «${parola}» e ti risponde ${operatrice}.`),
+  introSposta: (servizio: string, quando: string) => `Spostiamo ${servizio}, ora fissato ${quando}.`,
+  riepilogoSposta: (servizio: string, da: string, a: string) =>
+    `Confermi lo spostamento?\n\nServizio: ${servizio}\nDa: ${da}\nA: ${a}`,
+  spostato: (servizio: string, quando: string, inAttesa: boolean, operatrice: string) =>
+    `Fatto! Il tuo appuntamento per ${servizio} è spostato a ${quando}.` +
+    (inAttesa ? `\nLa richiesta resta in attesa della conferma di ${operatrice}.` : ''),
+  spostamentoAnnullato: "Va bene, l'appuntamento resta com'era.",
+  domandaDisdetta: (servizio: string, quando: string) => `Confermi la disdetta di ${servizio} di ${quando}?`,
+  pulsanteSiDisdici: 'Sì, disdici',
+  pulsanteNoTieni: 'No, lo tengo',
+  disdetto: 'Appuntamento disdetto. Grazie per avermi avvisato! Quando vuoi, scrivimi per prenotarne un altro.',
+  disdettaAnnullata: "Va bene, l'appuntamento resta in programma.",
 
   // --- operatore
   operatoreAvvisata: (operatrice: string) => `Ok, ho avvisato ${operatrice}: ti risponderà lei appena possibile.`,
+
+  // --- risposte di Ilenia dal pannello
+  confermataDaIlenia: (operatrice: string, servizio: string, quando: string) =>
+    `Buone notizie! ${operatrice} ha confermato il tuo appuntamento: ${servizio}, ${quando}. Ti aspettiamo!`,
+  rifiutataDaIlenia: (operatrice: string, servizio: string, quando: string, motivo: string | null) =>
+    `Mi dispiace, ${operatrice} non può confermare l'appuntamento per ${servizio} di ${quando}.` +
+    `${motivo ? `\n${motivo}` : ''}\n\nVuoi scegliere un altro orario?`,
+  pulsanteAltroOrario: 'Scegli altro orario',
+} as const
+
+/** Template da far approvare a Meta (vedi guida Fase 6). */
+export const TEMPLATE = {
+  /** {{1}} nome, {{2}} servizio, {{3}} giorno e ora */
+  conferma: 'conferma_appuntamento',
+  lingua: 'it',
 } as const

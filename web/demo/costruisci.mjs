@@ -39,6 +39,9 @@ const risultato = await build({
     'process.env.NEXT_PUBLIC_DEMO': '"1"',
     'process.env.NEXT_PUBLIC_SUPABASE_URL': '""',
     'process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY': '""',
+    'process.env.NEXT_PUBLIC_API_URL': '""',
+    // qualunque altra variabile: assente (nel browser "process" non esiste)
+    'process.env': '{}',
   },
   tsconfig: join(web, 'tsconfig.json'),
 })

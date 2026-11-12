@@ -11,6 +11,7 @@ import { useAvvisi } from '@/components/Avvisi'
 import { nomeCliente } from '@/components/clienti'
 import { Campo, Pulsante, Scelta, Scheda, TitoloPagina, Vuoto } from '@/components/ui'
 import { Chat, type VoceChat } from '@/components/whatsapp/Chat'
+import { EVENTO_AGGIORNA_CONTATORI } from '@/lib/api'
 import { messaggioErrore } from '@/lib/errori'
 import { modalitaDemo, supabase } from '@/lib/supabase'
 
@@ -23,7 +24,7 @@ export default function PaginaWhatsApp() {
   if (!modalitaDemo) {
     return (
       <>
-        <TitoloPagina titolo="WhatsApp" />
+        <TitoloPagina titolo="Prova il bot" />
         <Vuoto titolo="Simulatore disponibile solo nella versione dimostrativa" />
       </>
     )
@@ -82,6 +83,10 @@ function Simulatore() {
       )
     } else if (n.tipo === 'operatore') {
       avvisi.successo(`${n.cliente} vuole parlare con te`)
+    } else if (n.tipo === 'disdetta') {
+      avvisi.successo(`${n.cliente} ha disdetto: ${n.servizio} ${n.quando}`)
+    } else if (n.tipo === 'spostamento') {
+      avvisi.successo(`${n.cliente} ha spostato ${n.servizio}: da ${n.da} a ${n.a}`)
     } else {
       avvisi.successo(`Messaggio da ${n.cliente}: ${n.testo}`)
     }
@@ -112,6 +117,7 @@ function Simulatore() {
     }
     await caricaChat(telefono)
     void caricaClienti()
+    window.dispatchEvent(new Event(EVENTO_AGGIORNA_CONTATORI))
     setInCorso(false)
   }
 
@@ -129,8 +135,8 @@ function Simulatore() {
   return (
     <>
       <TitoloPagina
-        titolo="WhatsApp"
-        sottotitolo="Simulatore: prova il bot come se fossi una cliente. Le prenotazioni compaiono subito in Agenda."
+        titolo="Prova il bot"
+        sottotitolo="Scrivi come se fossi una cliente su WhatsApp: prenotazioni, spostamenti e disdette compaiono subito in Agenda e in Richieste."
       />
       <div className="grid gap-5 lg:grid-cols-[1fr_minmax(0,26rem)]">
         <div className="order-2 flex flex-col gap-4 lg:order-1">
@@ -140,12 +146,13 @@ function Simulatore() {
               <li>Scrivi un messaggio qualsiasi, per esempio «ciao Ilenia».</li>
               <li>Tocca <strong>Prenota</strong>, scegli servizio, giorno e orario dalle liste.</li>
               <li>Se sei una cliente nuova il bot ti chiede il nome.</li>
-              <li>Conferma: la richiesta arriva in <strong>Agenda</strong> (in arancione, da approvare).</li>
-              <li>Scrivi «operatore» per vedere come il bot passa la parola a Ilenia.</li>
+              <li>Conferma: la richiesta arriva in <strong>Richieste</strong> e in <strong>Agenda</strong> (in arancione).</li>
+              <li>Approvala da <strong>Richieste</strong>: qui in chat arriva la conferma.</li>
+              <li>Prova <strong>Sposta</strong> e <strong>Disdici</strong> (fino a 24 ore prima).</li>
+              <li>Scrivi «operatore»: la chat compare in <strong>Messaggi</strong>, dove rispondi tu.</li>
             </ol>
             <p className="mt-3 text-xs text-stone-500">
               Sul telefono della cliente i pulsanti e le liste sono quelli di WhatsApp; qui sono disegnati in modo simile.
-              Sposta e Disdici arrivano nella prossima fase.
             </p>
           </Scheda>
           <Scheda>

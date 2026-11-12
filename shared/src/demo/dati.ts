@@ -3,6 +3,7 @@
  * appuntamenti calcolati rispetto alla settimana in corso, così la demo
  * sembra sempre "viva". Nomi e numeri sono inventati.
  */
+import type { DateTime } from 'luxon'
 import { adesso, daDataOra, versoIso } from '../tempo'
 
 export const ID_UTENTE = '11111111-1111-4111-8111-111111111111'
@@ -53,7 +54,7 @@ const APPUNTAMENTI: Riga_[] = [
   [0, 2, '15:00', 'c-francesca', 's-taglio', 'confermato', 'whatsapp'],
   [0, 3, '09:30', 'c-chiara', 's-meches', 'confermato', 'pannello'],
   [0, 3, '14:30', 'c-sara', 's-piega', 'confermato', 'whatsapp'],
-  [0, 3, '16:00', 'c-elena', 's-taglio', 'in_attesa', 'whatsapp'],
+  [0, 3, '16:00', 'c-elena', 's-taglio', 'confermato', 'whatsapp'],
   [0, 4, '09:00', 'c-laura', 's-colore', 'confermato', 'whatsapp'],
   [0, 4, '11:00', 'c-valentina', 's-piega', 'confermato', 'pannello'],
   [0, 4, '15:00', 'c-alessia', 's-trattamento', 'confermato', 'whatsapp'],
@@ -66,11 +67,83 @@ const APPUNTAMENTI: Riga_[] = [
   [0, 6, '13:00', 'c-anna', 's-taglio', 'confermato', 'whatsapp'],
   [1, 2, '10:00', 'c-sara', 's-colore', 'confermato', 'whatsapp'],
   [1, 2, '15:00', 'c-martina', 's-trattamento', 'in_attesa', 'whatsapp'],
+  [1, 3, '16:00', 'c-elena', 's-taglio', 'in_attesa', 'whatsapp'],
+  [1, 5, '11:00', 'c-valentina', 's-piega', 'in_attesa', 'whatsapp'],
   [1, 3, '09:00', 'c-giulia', 's-piega', 'confermato', 'pannello'],
   [1, 4, '10:30', 'c-maria', 's-taglio', 'confermato', 'whatsapp'],
   [1, 5, '09:30', 'c-chiara', 's-colore-piega', 'confermato', 'whatsapp'],
   [1, 6, '11:00', 'c-francesca', 's-piega', 'confermato', 'pannello'],
 ]
+
+/**
+ * Conversazioni di esempio, per le pagine Messaggi e Richieste:
+ * - Elena ha appena chiesto un appuntamento (finestra gratuita aperta);
+ * - Martina ha scritto più di 24 ore fa (la conferma partirà con un template);
+ * - Giulia ha chiesto di parlare con Ilenia (bot in pausa).
+ */
+function conversazioniDemo(ora: DateTime, appElena: string | undefined) {
+  const iso = (d: DateTime) => versoIso(d)
+  const log: Riga[] = []
+  const msg = (cliente_id: string, telefono: string, quando: DateTime, direzione: 'in' | 'out', contenuto: unknown) =>
+    log.push({
+      id: log.length + 1,
+      direzione,
+      cliente_id,
+      telefono,
+      wa_message_id: `wamid.demo.${log.length + 1}`,
+      tipo: direzione === 'in' ? 'testo' : 'interattivo',
+      costo: direzione === 'in' ? 'entrata' : 'libero',
+      template_nome: null,
+      contenuto,
+      stato_consegna: direzione === 'out' ? 'read' : null,
+      errore: null,
+      creato_il: iso(quando),
+    })
+
+  const elena = ora.minus({ hours: 2 })
+  const quandoElena = ora.startOf('week').plus({ weeks: 1, days: 2 }).set({ hour: 16, minute: 0 })
+  msg('c-elena', '393000000106', elena, 'in', { tipo: 'testo', testo: 'Ciao! Vorrei prenotare un taglio' })
+  msg('c-elena', '393000000106', elena.plus({ seconds: 3 }), 'out', {
+    tipo: 'pulsanti',
+    testo: "Ciao Elena! Sono l'assistente di Ilenia, cosa vuoi fare?",
+    piede: 'Scrivi «operatore» per parlare con Ilenia',
+    pulsanti: [
+      { id: 'menu:prenota', titolo: 'Prenota' },
+      { id: 'menu:sposta', titolo: 'Sposta' },
+      { id: 'menu:disdici', titolo: 'Disdici' },
+    ],
+  })
+  msg('c-elena', '393000000106', elena.plus({ minutes: 1 }), 'in', { tipo: 'scelta', id: 'menu:prenota', titolo: 'Prenota' })
+  msg('c-elena', '393000000106', elena.plus({ minutes: 2 }), 'in', { tipo: 'scelta', id: 'conferma:si', titolo: 'Conferma' })
+  msg('c-elena', '393000000106', elena.plus({ minutes: 2, seconds: 3 }), 'out', {
+    tipo: 'testo',
+    testo: `Richiesta ricevuta, Ilenia ti confermerà a breve.\n\nTaglio e piega, ${quandoElena.setLocale('it-IT').toFormat("cccc d LLLL 'alle' HH:mm")}.`,
+  })
+
+  const martina = ora.minus({ hours: 30 })
+  msg('c-martina', '393000000110', martina, 'in', { tipo: 'testo', testo: 'Buongiorno, vorrei un trattamento' })
+  msg('c-martina', '393000000110', martina.plus({ minutes: 2 }), 'out', {
+    tipo: 'testo',
+    testo: 'Richiesta ricevuta, Ilenia ti confermerà a breve.',
+  })
+
+  const giulia = ora.minus({ minutes: 50 })
+  msg('c-giulia', '393000000102', giulia, 'in', { tipo: 'testo', testo: 'Posso parlare con un operatore? Vorrei portare anche mia figlia' })
+  msg('c-giulia', '393000000102', giulia.plus({ seconds: 3 }), 'out', {
+    tipo: 'testo',
+    testo: 'Ok, ho avvisato Ilenia: ti risponderà lei appena possibile.',
+  })
+
+  const conversazioni = [
+    { id: 'conv-elena', cliente_id: 'c-elena', stato: 'menu', contesto: {}, ultimo_messaggio_cliente_il: iso(elena.plus({ minutes: 2 })), bot_in_pausa_fino_al: null, creato_il: iso(elena), aggiornato_il: iso(elena) },
+    { id: 'conv-martina', cliente_id: 'c-martina', stato: 'menu', contesto: {}, ultimo_messaggio_cliente_il: iso(martina), bot_in_pausa_fino_al: null, creato_il: iso(martina), aggiornato_il: iso(martina) },
+    { id: 'conv-giulia', cliente_id: 'c-giulia', stato: 'operatore', contesto: {}, ultimo_messaggio_cliente_il: iso(giulia), bot_in_pausa_fino_al: iso(giulia.plus({ hours: 12 })), creato_il: iso(giulia), aggiornato_il: iso(giulia) },
+  ]
+  const lista_attesa = appElena
+    ? [{ id: 'la-elena', appuntamento_id: appElena, cliente_id: 'c-elena', operatrice_id: ID_OPERATRICE, attiva: true, creato_il: iso(elena), aggiornato_il: iso(elena) }]
+    : []
+  return { log, conversazioni, lista_attesa }
+}
 
 /** Identifica la settimana dei dati (per rigenerarli quando cambia). */
 export function chiaveSettimana(): string {
@@ -173,6 +246,11 @@ export function creaDatiDemo(): DbDemo {
     }
   })
 
+  const esempio = conversazioniDemo(
+    ora,
+    appuntamenti.find((a) => a.cliente_id === 'c-elena' && a.stato === 'in_attesa')?.id,
+  )
+
   return {
     operatrici: [
       {
@@ -213,9 +291,9 @@ export function creaDatiDemo(): DbDemo {
     appuntamenti,
     // messaggi "già scambiati" nel mese, per dare senso al contatore
     contatore_base: [{ mese: ora.toUTC().toFormat('yyyy-LL'), liberi: 186, template: 2, ricevuti: 141 }],
-    log_messaggi: [],
-    conversazioni: [],
-    lista_attesa: [],
+    log_messaggi: esempio.log,
+    conversazioni: esempio.conversazioni,
+    lista_attesa: esempio.lista_attesa,
     slot_liberati: [],
     proposte_anticipo: [],
     push_iscrizioni: [],

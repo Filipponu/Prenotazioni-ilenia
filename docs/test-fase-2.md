@@ -20,8 +20,8 @@ Cosa c'è in questa fase:
   il bot risponde sempre dentro la finestra di 24 ore aperta dalla cliente. Ogni messaggio finisce nel
   registro e nel contatore delle Impostazioni.
 
-**Sposta** e **Disdici** per ora rispondono «scrivi operatore»: arrivano nella Fase 3, insieme
-all'approvazione delle richieste dal pannello.
+**Sposta**, **Disdici** e l'approvazione delle richieste dal pannello sono arrivati nella Fase 3
+(vedi [test-fase-3.md](test-fase-3.md)).
 
 ---
 

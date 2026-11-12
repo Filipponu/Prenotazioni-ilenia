@@ -1,6 +1,16 @@
 // Percorso completo della Fase 1 nel browser, contro il finto Supabase.
 import { createRequire } from 'node:module'
 const { chromium, devices } = createRequire(import.meta.url)('playwright')
+const { DateTime } = createRequire(new URL('../../web/package.json', import.meta.url))('luxon')
+
+// date relative alla settimana prossima, così la prova non dipende dal giorno in cui si lancia
+const lunediProssimo = DateTime.now().setZone('Europe/Rome').startOf('week').plus({ weeks: 1 })
+const GIO = lunediProssimo.plus({ days: 3 }).toISODate()
+const VEN = lunediProssimo.plus({ days: 4 }).toISODate()
+const LUN = lunediProssimo.toISODate()
+const annoNatale = DateTime.now().month === 12 && DateTime.now().day > 23 ? DateTime.now().year + 1 : DateTime.now().year
+const NATALE = DateTime.fromISO(`${annoNatale}-12-24`, { zone: 'Europe/Rome' }).setLocale('it-IT')
+const NATALE_TESTO = `dal ${NATALE.toFormat('ccc d/LL')} al ${NATALE.plus({ days: 2 }).toFormat('ccc d/LL')}`
 import { mkdirSync } from 'node:fs'
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
@@ -105,12 +115,12 @@ await avviso(page, 'Orario salvato')
 
 passo('chiusura per Natale')
 await page.getByRole('button', { name: '+ Aggiungi chiusura' }).click()
-await page.getByLabel('Dal').fill('2026-12-24')
-await page.getByLabel('Al (compreso)').fill('2026-12-26')
+await page.getByLabel('Dal').fill(NATALE.toISODate())
+await page.getByLabel('Al (compreso)').fill(NATALE.plus({ days: 2 }).toISODate())
 await page.getByLabel('Motivo (facoltativo)').fill('Ferie di Natale')
 await page.locator('dialog').getByRole('button', { name: 'Salva' }).click()
 await avviso(page, 'Chiusura aggiunta')
-await page.getByText('dal gio 24/12 al sab 26/12').waitFor()
+await page.getByText(NATALE_TESTO).waitFor()
 await senzaAvvisi(page)
 await page.screenshot({ path: FOTO + '03-orari.png', fullPage: true })
 
@@ -155,30 +165,31 @@ async function nuovoAppuntamento(cliente, servizio, giorno, ora) {
   await page.getByLabel('Ora').fill(ora)
   await page.locator('dialog').getByRole('button', { name: 'Salva' }).click()
 }
-await nuovoAppuntamento('Maria', 'Piega (45 min)', '2026-11-12', '10:00')
+await nuovoAppuntamento('Maria', 'Piega (45 min)', GIO, '10:00')
 await avviso(page, 'Appuntamento creato')
-await nuovoAppuntamento('Giulia', 'Taglio donna (30 min)', '2026-11-12', '11:00')
+await nuovoAppuntamento('Giulia', 'Taglio donna (30 min)', GIO, '11:00')
 await avviso(page, 'Appuntamento creato')
-await nuovoAppuntamento('Sara', 'Colore + piega (2 h)', '2026-11-13', '15:00')
+await nuovoAppuntamento('Sara', 'Colore + piega (2 h)', VEN, '15:00')
 await avviso(page, 'Appuntamento creato')
 
 passo('agenda: sovrapposizione rifiutata')
-await nuovoAppuntamento('Sara', 'Colore + piega (2 h)', '2026-11-12', '10:30')
+await nuovoAppuntamento('Sara', 'Colore + piega (2 h)', GIO, '10:30')
 await page.getByText('Quell\'orario si sovrappone a un altro appuntamento.').waitFor()
 await page.screenshot({ path: FOTO + '05-sovrapposizione.png' })
 await page.locator('dialog').getByRole('button', { name: 'Annulla' }).click()
 
 passo('agenda: fuori orario → avviso')
-await nuovoAppuntamento('Sara', 'Piega (45 min)', '2026-11-16', '10:00') // lunedì: chiuso
+await nuovoAppuntamento('Sara', 'Piega (45 min)', LUN, '10:00') // lunedì: chiuso
 await page.getByText('fuori dal tuo orario di lavoro').waitFor()
 await page.screenshot({ path: FOTO + '06-fuori-orario.png' })
 await page.locator('dialog').getByRole('button', { name: 'Annulla' }).click()
 
 passo('agenda: chiusura natalizia → avviso')
-await nuovoAppuntamento('Sara', 'Piega (45 min)', '2026-12-24', '10:00')
+await nuovoAppuntamento('Sara', 'Piega (45 min)', NATALE.toISODate(), '10:00')
 await page.getByText('risulti chiusa (Ferie di Natale)').waitFor()
 await page.locator('dialog').getByRole('button', { name: 'Annulla' }).click()
 
+await page.getByRole('button', { name: 'Periodo successivo' }).click()
 await page.getByText('Maria Bianchi · Piega').first().waitFor()
 await page.getByText('Sara Neri · Colore + piega').first().waitFor()
 await senzaAvvisi(page)
@@ -255,6 +266,7 @@ await tel.getByLabel('Email').fill('ilenia@example.com')
 await tel.getByLabel('Password').fill('prova1234')
 await tel.getByRole('button', { name: 'Accedi' }).click()
 await tel.waitForURL('**/agenda/')
+await tel.getByRole('button', { name: 'Settimana', exact: true }).click()
 await tel.getByRole('button', { name: 'Periodo successivo' }).click()
 await tel.getByText('Maria Bianchi · Piega').first().waitFor()
 await tel.screenshot({ path: FOTO + '12-telefono-agenda.png' })
@@ -262,7 +274,8 @@ await tel.getByRole('button', { name: '+ Nuovo' }).click()
 await tel.locator('dialog').getByText('Nuovo appuntamento').waitFor()
 await tel.screenshot({ path: FOTO + '13-telefono-nuovo.png' })
 await tel.locator('dialog').getByRole('button', { name: 'Annulla' }).click()
-await tel.getByRole('link', { name: 'Servizi' }).click()
+await tel.getByRole('button', { name: 'Altro' }).click()
+await tel.locator('dialog[open]').getByRole('link', { name: 'Servizi' }).click()
 await tel.getByText('Colore + piega').waitFor()
 await tel.screenshot({ path: FOTO + '14-telefono-servizi.png' })
 
