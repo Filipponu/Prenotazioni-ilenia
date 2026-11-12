@@ -8,8 +8,8 @@
  */
 import { chiaveSettimana, creaDatiDemo, EMAIL_DEMO, ID_OPERATRICE, ID_UTENTE, PASSWORD_DEMO, type DbDemo, type Riga } from './dati'
 
-const CHIAVE_DATI = 'ilenia-demo-dati-v3'
-const CHIAVE_SETTIMANA = 'ilenia-demo-settimana-v3'
+const CHIAVE_DATI = 'ilenia-demo-dati-v4'
+const CHIAVE_SETTIMANA = 'ilenia-demo-settimana-v4'
 
 // caricati alla prima richiesta (non all'import, che avviene anche durante la build)
 let db: DbDemo = {}
@@ -68,7 +68,13 @@ export function ripristinaDemo() {
 // ---------------------------------------------------------------------
 // Query in stile PostgREST
 // ---------------------------------------------------------------------
-const FK: Record<string, string> = { clienti: 'cliente_id', servizi: 'servizio_id', operatrici: 'operatrice_id' }
+const FK: Record<string, string> = {
+  clienti: 'cliente_id',
+  servizi: 'servizio_id',
+  operatrici: 'operatrice_id',
+  appuntamenti: 'appuntamento_id',
+  slot_liberati: 'slot_id',
+}
 const PARAMETRI_SPECIALI = new Set(['select', 'order', 'limit', 'offset', 'columns', 'on_conflict'])
 
 function dividi(testo: string): string[] {
@@ -183,13 +189,19 @@ function ordina(righe: Riga[], ordini: string[]): Riga[] {
 
 /** Vista contatore_messaggi_mensile: base di esempio + messaggi registrati. */
 function contatore(): Riga[] {
-  const mesi = new Map<string, { liberi: number; template: number; ricevuti: number }>()
+  const mesi = new Map<string, { liberi: number; template: number; ricevuti: number; fatturati: number }>()
   for (const b of db.contatore_base ?? []) {
-    mesi.set(String(b.mese), { liberi: Number(b.liberi), template: Number(b.template), ricevuti: Number(b.ricevuti) })
+    mesi.set(String(b.mese), {
+      liberi: Number(b.liberi),
+      template: Number(b.template),
+      ricevuti: Number(b.ricevuti),
+      fatturati: Number(b.template),
+    })
   }
   for (const l of db.log_messaggi ?? []) {
     const mese = String(l.creato_il).slice(0, 7)
-    const m = mesi.get(mese) ?? { liberi: 0, template: 0, ricevuti: 0 }
+    const m = mesi.get(mese) ?? { liberi: 0, template: 0, ricevuti: 0, fatturati: 0 }
+    if (l.direzione === 'out' && l.fatturato === true) m.fatturati++
     if (l.direzione === 'in') m.ricevuti++
     else if (l.costo === 'template') m.template++
     else if (l.costo === 'libero') m.liberi++
@@ -234,6 +246,16 @@ function verifica(tabella: string, riga: Riga, id: string | number | undefined) 
   if (tabella === 'log_messaggi' && riga.wa_message_id) {
     if ((db.log_messaggi ?? []).some((l) => l.id !== id && l.wa_message_id === riga.wa_message_id)) {
       throw new ErrorePg('23505', 'duplicate key value violates unique constraint "log_messaggi_wa_message_id_key"')
+    }
+  }
+  if (tabella === 'proposte_anticipo') {
+    const aperte = ['da_inviare', 'inviata']
+    const altre = (db.proposte_anticipo ?? []).filter((p) => p.id !== id)
+    if (altre.some((p) => p.codice === riga.codice)) {
+      throw new ErrorePg('23505', 'duplicate key value violates unique constraint "proposte_anticipo_codice_key"')
+    }
+    if (aperte.includes(String(riga.stato)) && altre.some((p) => p.slot_id === riga.slot_id && aperte.includes(String(p.stato)))) {
+      throw new ErrorePg('23505', 'duplicate key value violates unique constraint "proposte_una_attiva_per_slot"')
     }
   }
   if (tabella === 'clienti' && riga.telefono) {
@@ -386,6 +408,8 @@ export async function fetchDemo(input: RequestInfo | URL, init?: RequestInit): P
         chiusure: { motivo: null },
         conversazioni: { stato: 'menu', contesto: {}, ultimo_messaggio_cliente_il: null, bot_in_pausa_fino_al: null },
         lista_attesa: { attiva: true },
+        slot_liberati: { stato: 'aperto', origine_appuntamento_id: null },
+        proposte_anticipo: { stato: 'da_inviare', inviata_il: null, scade_il: null, risposta_il: null, lista_attesa_id: null },
         log_messaggi: {
           cliente_id: null,
           wa_message_id: null,

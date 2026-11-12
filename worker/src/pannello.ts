@@ -6,17 +6,21 @@
  * sessione Supabase dell'operatrice: il Worker lo verifica con Supabase e
  * controlla che l'utente sia un'operatrice attiva.
  */
+import { chiudiSlot, inviaPropostaManuale } from '@ilenia/shared/bot/anticipo'
 import {
   approvaRichiesta,
+  disdiciDalPannello,
   ErroreAzione,
   rifiutaRichiesta,
   rispondiCliente,
+  segnaRispostaProposta,
   type ContestoAzioni,
 } from '@ilenia/shared/bot/azioni'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { Ambiente } from './ambiente'
 import type { Dipendenze } from './index'
+import { notificaIlenia } from './notifiche'
 
 type Variabili = { operatriceId: string; azioni: ContestoAzioni }
 
@@ -42,7 +46,7 @@ export function creaApiPannello(dipendenze: Dipendenze) {
       .maybeSingle()
     if (!operatrice) return c.json({ errore: 'Account non abilitato' }, 403)
     c.set('operatriceId', operatrice.id)
-    c.set('azioni', { db, canale: dipendenze.creaCanale(c.env) })
+    c.set('azioni', { db, canale: dipendenze.creaCanale(c.env), notifica: notificaIlenia })
     await next()
   })
 
@@ -61,6 +65,28 @@ export function creaApiPannello(dipendenze: Dipendenze) {
   api.post('/richieste/:id/rifiuta', async (c) => {
     const corpo = (await c.req.json().catch(() => ({}))) as { motivo?: string }
     return c.json(await rifiutaRichiesta(c.get('azioni'), c.get('operatriceId'), c.req.param('id'), corpo.motivo))
+  })
+
+  // --- lista d'attesa
+  api.post('/proposte/:id/inviata', async (c) => {
+    const m = await inviaPropostaManuale(c.get('azioni'), c.get('operatriceId'), c.req.param('id'))
+    if (!m) throw new ErroreAzione('gia_gestita', 'Questa proposta non è più valida.')
+    return c.json(m)
+  })
+
+  api.post('/proposte/:id/risposta', async (c) => {
+    const corpo = (await c.req.json().catch(() => ({}))) as { accettata?: boolean }
+    return c.json(await segnaRispostaProposta(c.get('azioni'), c.get('operatriceId'), c.req.param('id'), corpo.accettata === true))
+  })
+
+  api.post('/slot/:id/chiudi', async (c) => {
+    await chiudiSlot(c.get('azioni'), c.get('operatriceId'), c.req.param('id'))
+    return c.json({ ok: true })
+  })
+
+  api.post('/appuntamenti/:id/disdici', async (c) => {
+    const corpo = (await c.req.json().catch(() => ({}))) as { proponi?: boolean }
+    return c.json(await disdiciDalPannello(c.get('azioni'), c.get('operatriceId'), c.req.param('id'), corpo.proponi !== false))
   })
 
   api.post('/clienti/:id/messaggio', async (c) => {

@@ -1,6 +1,7 @@
 'use client'
 
 import type { ContatoreMessaggiMensile, Impostazioni } from '@ilenia/shared/tipi-db'
+import { normalizzaTelefono, formattaTelefono } from '@ilenia/shared/telefono'
 import { DateTime } from 'luxon'
 import { useEffect, useState } from 'react'
 import { useAvvisi } from '@/components/Avvisi'
@@ -38,6 +39,7 @@ export default function PaginaImpostazioni() {
   const [imp, setImp] = useState<Impostazioni | null>(null)
   const [nome, setNome] = useState(operatrice.nome)
   const [contatore, setContatore] = useState<ContatoreMessaggiMensile | null | undefined>(undefined)
+  const [numeroBot, setNumeroBot] = useState('')
   const [inCorso, setInCorso] = useState(false)
 
   useEffect(() => {
@@ -48,7 +50,10 @@ export default function PaginaImpostazioni() {
       sb.from('contatore_messaggi_mensile').select('*').eq('mese', mese).maybeSingle(),
     ]).then(([i, c]) => {
       if (i.error) avvisi.errore(messaggioErrore(i.error))
-      else setImp(i.data)
+      else {
+        setImp(i.data)
+        setNumeroBot(formattaTelefono(i.data.numero_whatsapp))
+      }
       setContatore(c.data ?? null)
     })
   }, [operatrice.id, avvisi])
@@ -60,6 +65,11 @@ export default function PaginaImpostazioni() {
   async function salva(e: React.FormEvent) {
     e.preventDefault()
     if (!imp) return
+    const numero = numeroBot.trim() ? normalizzaTelefono(numeroBot) : null
+    if (numeroBot.trim() && !numero) {
+      avvisi.errore('Numero WhatsApp del salone non valido (es. 333 123 4567).')
+      return
+    }
     setInCorso(true)
     const sb = supabase()
     const { operatrice_id: _id, creato_il: _c, aggiornato_il: _a, ...valori } = imp
@@ -67,6 +77,7 @@ export default function PaginaImpostazioni() {
       sb.from('impostazioni').update({
         ...valori,
         parola_operatore: valori.parola_operatore.trim().toLowerCase(),
+        numero_whatsapp: numero,
         telefono_salone: valori.telefono_salone?.trim() || null,
         email_notifiche: valori.email_notifiche?.trim() || null,
       }).eq('operatrice_id', operatrice.id),
@@ -227,7 +238,7 @@ export default function PaginaImpostazioni() {
 
         <Scheda>
           <h2 className="text-lg font-semibold">Lista d&apos;attesa</h2>
-          <p className="mb-4 text-sm text-stone-500">Quando una cliente disdice, proponiamo il posto a chi vuole anticipare (Fase 4).</p>
+          <p className="mb-4 text-sm text-stone-500">Quando una cliente disdice, proponiamo il posto a chi vuole anticipare.</p>
           <div className="flex flex-col gap-4">
             <SceltaRadio
               etichetta="Come avvisare le clienti"
@@ -238,6 +249,14 @@ export default function PaginaImpostazioni() {
                 ['automatica', 'Automatica (a pagamento)', 'Il bot scrive da solo; se la chat è chiusa usa un template a pagamento.'],
               ]}
             />
+            <Voce
+              etichetta="Numero WhatsApp del salone"
+              aiuto="Il numero del bot (la SIM del salone). Nei messaggi manuali la cliente accetta con un tocco e il bot sposta da solo l'appuntamento."
+            >
+              {(id) => (
+                <Campo id={id} type="tel" inputMode="tel" placeholder="es. 333 123 4567" value={numeroBot} onChange={(e) => setNumeroBot(e.target.value)} />
+              )}
+            </Voce>
             <div className="grid grid-cols-2 gap-3">
               <Voce etichetta="Tempo per rispondere" aiuto="Minuti, poi si passa alla successiva">
                 {(id) => (
@@ -363,8 +382,14 @@ function Contatore({ contatore }: { contatore: ContatoreMessaggiMensile | null |
   const liberi = contatore?.liberi ?? 0
   const template = contatore?.template ?? 0
   const ricevuti = contatore?.ricevuti ?? 0
+  const fatturati = contatore?.fatturati ?? 0
   const percentuale = Math.min(100, Math.round((liberi / SOGLIA_GRATUITA) * 100))
   const vicino = liberi >= SOGLIA_GRATUITA * 0.8
+  const tessere: Array<[string, number, string]> = [
+    ['Template', template, 'a pagamento'],
+    ['Fatturati da Meta', fatturati, 'conteggio ufficiale'],
+    ['Ricevuti', ricevuti, 'dalle clienti'],
+  ]
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -385,20 +410,33 @@ function Contatore({ contatore }: { contatore: ContatoreMessaggiMensile | null |
           <div className={cx('h-full rounded-full', vicino ? 'bg-red-500' : 'bg-brand-500')} style={{ width: `${percentuale}%` }} />
         </div>
         {vicino ? (
-          <p className="mt-1 text-xs text-red-700">Oltre le 1.000 risposte del mese, Meta le fa pagare.</p>
+          <p className="mt-1 text-xs text-red-700">
+            Oltre le 1.000 risposte del mese Meta le fa pagare; senza un metodo di pagamento sull&apos;account non le consegna.
+          </p>
         ) : null}
       </div>
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-xl bg-stone-50 p-3">
-          <dt className="text-stone-500">Template (a pagamento)</dt>
-          <dd className="text-xl font-semibold text-stone-900">{template.toLocaleString('it-IT')}</dd>
-        </div>
-        <div className="rounded-xl bg-stone-50 p-3">
-          <dt className="text-stone-500">Messaggi ricevuti</dt>
-          <dd className="text-xl font-semibold text-stone-900">{ricevuti.toLocaleString('it-IT')}</dd>
-        </div>
+      <dl className="grid grid-cols-3 gap-2 text-sm">
+        {tessere.map(([titolo, valore, nota]) => (
+          <div key={titolo} className="rounded-xl bg-stone-50 p-3">
+            <dt className="text-xs text-stone-500">{titolo}</dt>
+            <dd className="text-xl font-semibold text-stone-900 tabular-nums">{valore.toLocaleString('it-IT')}</dd>
+            <dd className="text-[11px] text-stone-400">{nota}</dd>
+          </div>
+        ))}
       </dl>
-      <p className="text-xs text-stone-500">Conteggio dal 1° del mese (ora UTC, come la fatturazione di Meta).</p>
+      <p className="text-xs text-stone-500">
+        Dal 1° del mese (ora UTC, come la fatturazione di Meta). Le prime 1.000 risposte consegnate sono gratuite per ogni numero;
+        «Fatturati da Meta» è il dato che Meta invia con le conferme di consegna. Prezzi per l&apos;Italia:{' '}
+        <a
+          href="https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing#rate-cards-and-volume-tiers"
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2"
+        >
+          listino di Meta
+        </a>
+        .
+      </p>
     </div>
   )
 }

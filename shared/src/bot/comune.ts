@@ -13,6 +13,19 @@ export interface Canale {
   invia(telefono: string, messaggio: MessaggioUscita): Promise<{ id: string | null }>
 }
 
+/** Avvisi per Ilenia (in seguito: notifiche push / email). */
+export type Notifica =
+  | { tipo: 'richiesta'; appuntamentoId: string; confermata: boolean; cliente: string; servizio: string; quando: string }
+  | { tipo: 'operatore'; cliente: string; telefono: string }
+  | { tipo: 'messaggio'; cliente: string; telefono: string; testo: string }
+  | { tipo: 'disdetta'; appuntamentoId: string; cliente: string; servizio: string; quando: string }
+  | { tipo: 'spostamento'; appuntamentoId: string; cliente: string; servizio: string; da: string; a: string }
+  /** lista d'attesa manuale: Ilenia deve mandare la proposta dal suo telefono */
+  | { tipo: 'anticipo_da_inviare'; propostaId: string; cliente: string; servizio: string; quando: string; attuale: string }
+  /** lista d'attesa automatica: proposta inviata dal bot */
+  | { tipo: 'anticipo_proposto'; propostaId: string; cliente: string; servizio: string; quando: string }
+  | { tipo: 'anticipo_accettato'; cliente: string; servizio: string; da: string; a: string }
+
 type Risultato = { data: unknown; error: { message: string; code?: string } | null }
 
 /** Risultato di una query che deve restituire dati (errore altrimenti). */

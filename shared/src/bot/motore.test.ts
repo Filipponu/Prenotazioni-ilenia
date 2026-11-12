@@ -331,8 +331,22 @@ describe('casi particolari', () => {
 
   it('stato di consegna: aggiornato nel registro', async () => {
     await scrivi(MARIA, 'ciao')
+    await gestisciEvento(ctx, {
+      tipo: 'stato',
+      id: 'wamid.out.1',
+      stato: 'delivered',
+      destinatario: MARIA,
+      timestamp: 0,
+      fatturazione: { fatturabile: false, categoria: 'service', tipo: 'free_customer_service' },
+      errore: null,
+    })
     await gestisciEvento(ctx, { tipo: 'stato', id: 'wamid.out.1', stato: 'read', destinatario: MARIA, timestamp: 0, fatturazione: null, errore: null })
-    expect(datiDemo().log_messaggi!.find((l) => l.wa_message_id === 'wamid.out.1')?.stato_consegna).toBe('read')
+    // lo stato "read" non porta il prezzo: resta quello comunicato prima
+    expect(datiDemo().log_messaggi!.find((l) => l.wa_message_id === 'wamid.out.1')).toMatchObject({
+      stato_consegna: 'read',
+      fatturato: false,
+      categoria_meta: 'service',
+    })
   })
 })
 

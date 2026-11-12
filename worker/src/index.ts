@@ -6,9 +6,13 @@
  *                               immediata 200, elaborazione in background
  * - POST /api/pannello/…        azioni del pannello che scrivono alle clienti
  *                               (approva, rifiuta, rispondi): vedi pannello.ts
+ * - GET  /r/:id                 lista d'attesa manuale: segna la proposta come
+ *                               inviata e apre WhatsApp col messaggio pronto
  * - GET  /api/salute            controllo che il Worker sia vivo
+ * - ogni minuto (cron)          scadenze delle proposte della lista d'attesa
  * - tutto il resto: file statici del pannello (web/out)
  */
+import { elaboraScadenze, inviaPropostaManuale } from '@ilenia/shared/bot/anticipo'
 import { gestisciEvento, type ContestoBot, type Db } from '@ilenia/shared/bot/motore'
 import type { Database } from '@ilenia/shared/tipi-db'
 import { firmaValida } from '@ilenia/shared/whatsapp/firma'
@@ -17,6 +21,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Hono } from 'hono'
 import type { Ambiente } from './ambiente'
 import { creaCanale, type CanaleWorker } from './meta'
+import { notificaIlenia } from './notifiche'
 import { creaApiPannello } from './pannello'
 
 export interface Dipendenze {
@@ -63,9 +68,31 @@ export function creaApp(dipendenze: Dipendenze = predefinite) {
 
   app.route('/api/pannello', creaApiPannello(dipendenze))
 
+  // link aperto da Ilenia (pannello o notifica): l'id è un UUID, non indovinabile
+  app.get('/r/:id', async (c) => {
+    const db = dipendenze.creaDb(c.env)
+    const { data: proposta } = await db.from('proposte_anticipo').select('operatrice_id').eq('id', c.req.param('id')).maybeSingle()
+    const messaggio = proposta
+      ? await inviaPropostaManuale({ db, canale: dipendenze.creaCanale(c.env) }, proposta.operatrice_id, c.req.param('id'))
+      : null
+    if (!messaggio) return c.text('Questa proposta non è più valida: il posto è già stato assegnato o è scaduto.', 410)
+    return c.redirect(messaggio.link, 302)
+  })
+
   app.all('/api/*', (c) => c.json({ errore: 'Indirizzo non trovato' }, 404))
 
   return app
+}
+
+/** Lavoro programmato ogni minuto: proposte della lista d'attesa senza risposta. */
+export async function lavoroProgrammato(env: Ambiente, dipendenze: Dipendenze = predefinite) {
+  const gestite = await elaboraScadenze({
+    db: dipendenze.creaDb(env),
+    canale: dipendenze.creaCanale(env),
+    notifica: notificaIlenia,
+  })
+  if (gestite > 0) console.log(`Lista d'attesa: ${gestite} proposte scadute gestite`)
+  return gestite
 }
 
 async function elabora(env: Ambiente, dipendenze: Dipendenze, eventi: EventoWhatsApp[]) {
@@ -75,8 +102,7 @@ async function elabora(env: Ambiente, dipendenze: Dipendenze, eventi: EventoWhat
     db: dipendenze.creaDb(env),
     canale,
     operatriceId: env.BOT_OPERATRICE_ID || null,
-    // Fase 5: notifiche push / email a Ilenia
-    notifica: (n) => console.log('Notifica per Ilenia:', JSON.stringify(n)),
+    notifica: notificaIlenia,
   }
   // uno alla volta, nell'ordine di arrivo
   for (const evento of eventi) {
@@ -89,4 +115,11 @@ async function elabora(env: Ambiente, dipendenze: Dipendenze, eventi: EventoWhat
   }
 }
 
-export default creaApp()
+const app = creaApp()
+
+export default {
+  fetch: app.fetch,
+  async scheduled(_evento, env, ctx) {
+    ctx.waitUntil(lavoroProgrammato(env))
+  },
+} satisfies ExportedHandler<Ambiente>

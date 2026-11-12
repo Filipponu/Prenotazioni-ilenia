@@ -16,6 +16,8 @@
     "WHATSAPP_MODALITA": "reale",
     "WHATSAPP_GRAPH_VERSION": "v24.0"
   },
+  // ogni minuto: scadenze della lista d'attesa (il piano gratuito ammette fino a 5 cron)
+  "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true }
   // Segreti (mai qui dentro): wrangler secret put <NOME>
   //   SUPABASE_URL, SUPABASE_SECRET_KEY,

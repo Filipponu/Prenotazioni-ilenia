@@ -30,18 +30,11 @@ import {
 import type { Cliente, Conversazione, Impostazioni, Json, Servizio, StatoAppuntamento, TipoMessaggio } from '../tipi-db'
 import type { MessaggioUscita, RigaLista } from '../whatsapp/messaggi'
 import type { ContenutoIngresso, EventoWhatsApp } from '../whatsapp/webhook'
-import { inviaERegistra, senzaErrori, verifica, verificaForse, type Canale, type Db } from './comune'
+import { codiceAccettazione, liberaSlot, rispondiProposta, testoEsito } from './anticipo'
+import { inviaERegistra, senzaErrori, verifica, verificaForse, type Canale, type Db, type Notifica } from './comune'
 import { TESTI as T } from './testi'
 
-export type { Canale, Db } from './comune'
-
-/** Avvisi per Ilenia (in seguito: notifiche push / email). */
-export type Notifica =
-  | { tipo: 'richiesta'; appuntamentoId: string; confermata: boolean; cliente: string; servizio: string; quando: string }
-  | { tipo: 'operatore'; cliente: string; telefono: string }
-  | { tipo: 'messaggio'; cliente: string; telefono: string; testo: string }
-  | { tipo: 'disdetta'; appuntamentoId: string; cliente: string; servizio: string; quando: string }
-  | { tipo: 'spostamento'; appuntamentoId: string; cliente: string; servizio: string; da: string; a: string }
+export type { Canale, Db, Notifica } from './comune'
 
 export interface ContestoBot {
   db: Db
@@ -127,7 +120,14 @@ export async function gestisciEvento(ctx: ContestoBot, evento: EventoWhatsApp): 
   if (evento.tipo === 'stato') {
     await ctx.db
       .from('log_messaggi')
-      .update({ stato_consegna: evento.stato, errore: evento.errore })
+      .update({
+        stato_consegna: evento.stato,
+        errore: evento.errore,
+        // costo reale dichiarato da Meta (presente sugli stati "sent"/"delivered")
+        ...(evento.fatturazione
+          ? { fatturato: evento.fatturazione.fatturabile, categoria_meta: evento.fatturazione.categoria }
+          : {}),
+      })
       .eq('wa_message_id', evento.id)
     return
   }
@@ -223,6 +223,12 @@ class Turno {
   }
 
   async gestisci(c: ContenutoIngresso) {
+    // risposta a una proposta della lista d'attesa (pulsanti o «ACCETTO <codice>»): vale sempre
+    const sceltaAnticipo = c.tipo === 'scelta' ? /^anticipo-(ok|no):([A-Z0-9]{4,8})$/i.exec(c.id) : null
+    if (sceltaAnticipo) return this.rispostaAnticipo(sceltaAnticipo[2]!, sceltaAnticipo[1] === 'ok')
+    const codiceScritto = c.tipo === 'testo' ? codiceAccettazione(c.testo) : null
+    if (codiceScritto) return this.rispostaAnticipo(codiceScritto, true)
+
     // modalità operatore: il bot tace, Ilenia risponde a mano
     const pausa = this.conversazione.bot_in_pausa_fino_al
     if (pausa && Date.parse(pausa) > this.ora.toMillis()) {
@@ -559,6 +565,28 @@ class Turno {
     await this.salva('menu', {})
   }
 
+  // ----- lista d'attesa
+  private async rispostaAnticipo(codice: string, accetta: boolean) {
+    let risposto = false
+    const rispondi = async (e: Parameters<typeof testoEsito>[0]) => {
+      if (risposto) return
+      risposto = true
+      await this.invia({ tipo: 'testo', testo: testoEsito(e) })
+    }
+    const esito = await rispondiProposta(this.ctx, { codice, clienteId: this.cliente.id }, accetta, rispondi)
+    await rispondi(esito)
+    await this.salva('menu', {})
+  }
+
+  /** Propone il posto liberato alla lista d'attesa (un errore qui non blocca la cliente). */
+  private async proponiPosto(a: { id: string; inizio: string; fine: string }) {
+    try {
+      await liberaSlot(this.ctx, { operatriceId: this.operatrice.id, inizio: a.inizio, fine: a.fine, origineAppuntamentoId: a.id })
+    } catch (e) {
+      console.error('Lista d\'attesa: impossibile proporre il posto liberato', e)
+    }
+  }
+
   // ----- sposta e disdici
   private async appuntamentiFuturi(): Promise<AppuntamentoCliente[]> {
     return verifica(
@@ -726,8 +754,8 @@ class Turno {
       da,
       a: quando,
     })
-    // Fase 4: il posto lasciato libero andrà proposto alla lista d'attesa
     await this.salva('menu', {})
+    await this.proponiPosto(a)
   }
 
   private async chiediDisdetta(id: string) {
@@ -762,8 +790,8 @@ class Turno {
       servizio: a.servizi?.nome ?? 'Appuntamento',
       quando: dataOraLunga(daIso(a.inizio)),
     })
-    // Fase 4: il posto lasciato libero andrà proposto alla lista d'attesa
     await this.salva('menu', {})
+    await this.proponiPosto(a)
   }
 
   private async annullaDisdetta() {

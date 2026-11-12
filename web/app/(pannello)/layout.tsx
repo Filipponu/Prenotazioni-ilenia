@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { BannerDemo, EVENTO_RIPRISTINO } from '@/components/BannerDemo'
 import { Navigazione } from '@/components/Navigazione'
 import { Caricamento, Pulsante, Scheda } from '@/components/ui'
+import { scadenzeDemo } from '@/lib/api'
 import { useSessione } from '@/lib/sessione'
 import { modalitaDemo } from '@/lib/supabase'
 
@@ -18,6 +19,13 @@ export default function LayoutPannello({ children }: { children: React.ReactNode
   useEffect(() => {
     if (sessione.stato === 'anonimo') router.replace('/login/')
   }, [sessione.stato, router])
+
+  // demo: nel sito vero le scadenze della lista d'attesa le gestisce il Worker ogni minuto
+  useEffect(() => {
+    if (!modalitaDemo || sessione.stato !== 'pronta') return
+    const intervallo = setInterval(() => void scadenzeDemo(), 20_000)
+    return () => clearInterval(intervallo)
+  }, [sessione.stato])
 
   useEffect(() => {
     if (!modalitaDemo) return

@@ -16,13 +16,15 @@ import { linkWhatsApp } from '../telefono'
 import { adesso as adessoRoma, daIso, dataOraLunga } from '../tempo'
 import { statoFinestra } from '../whatsapp/finestra'
 import type { MessaggioUscita } from '../whatsapp/messaggi'
-import { inviaERegistra, senzaErrori, verifica, verificaForse, type Canale, type Db } from './comune'
+import { liberaSlot, rispondiProposta, testoEsito, type EsitoRisposta } from './anticipo'
+import { inviaERegistra, senzaErrori, verifica, verificaForse, type Canale, type Db, type Notifica } from './comune'
 import { TEMPLATE, TESTI as T } from './testi'
 
 export interface ContestoAzioni {
   db: Db
   canale: Canale
   adesso?: () => DateTime
+  notifica?: (n: Notifica) => void | Promise<void>
 }
 
 export type EsitoInvio =
@@ -158,6 +160,8 @@ export async function rifiutaRichiesta(
   )
   if (aggiornate.length === 0) throw new ErroreAzione('gia_gestita', 'Questa richiesta è già stata gestita.')
   senzaErrori(await ctx.db.from('lista_attesa').update({ attiva: false }).eq('appuntamento_id', appuntamentoId))
+  // il posto che la richiesta teneva occupato torna disponibile per la lista d'attesa
+  await liberaSlot(ctx, { operatriceId, inizio: r.app.inizio, fine: r.app.fine, origineAppuntamentoId: appuntamentoId })
 
   return inviaConFinestra(
     ctx,
@@ -195,4 +199,49 @@ export async function riattivaBot(db: Db, clienteId: string): Promise<void> {
       .update({ bot_in_pausa_fino_al: null, stato: 'menu', contesto: {} })
       .eq('cliente_id', clienteId),
   )
+}
+
+/** Disdetta decisa da Ilenia dall'agenda; se richiesto, il posto va alla lista d'attesa. */
+export async function disdiciDalPannello(
+  ctx: ContestoAzioni,
+  operatriceId: string,
+  appuntamentoId: string,
+  proponi: boolean,
+): Promise<{ proposto: boolean }> {
+  const aggiornati = verifica(
+    await ctx.db
+      .from('appuntamenti')
+      .update({ stato: 'disdetto' })
+      .eq('id', appuntamentoId)
+      .eq('operatrice_id', operatriceId)
+      .in('stato', ['in_attesa', 'confermato'])
+      .select('id, inizio, fine'),
+  )
+  const app = aggiornati[0]
+  if (!app) throw new ErroreAzione('gia_gestita', 'Questo appuntamento non è più attivo.')
+  senzaErrori(await ctx.db.from('lista_attesa').update({ attiva: false }).eq('appuntamento_id', appuntamentoId))
+  if (!proponi) return { proposto: false }
+  const slot = await liberaSlot(ctx, { operatriceId, inizio: app.inizio, fine: app.fine, origineAppuntamentoId: app.id })
+  if (!slot) return { proposto: false }
+  // proposto davvero solo se c'era una candidata (altrimenti il posto risulta «esaurito»)
+  const stato = verificaForse(await ctx.db.from('slot_liberati').select('stato').eq('id', slot).maybeSingle())
+  return { proposto: stato?.stato === 'aperto' }
+}
+
+/**
+ * Lista d'attesa manuale: Ilenia segna la risposta che la cliente le ha dato
+ * sul suo telefono. Se accetta, l'appuntamento si sposta (e la cliente, se ha
+ * scritto al bot nelle ultime 24 ore, riceve la conferma gratis).
+ */
+export async function segnaRispostaProposta(
+  ctx: ContestoAzioni,
+  operatriceId: string,
+  propostaId: string,
+  accettata: boolean,
+): Promise<EsitoRisposta> {
+  return rispondiProposta(ctx, { propostaId, operatriceId }, accettata, async (esito) => {
+    if (esito.esito === 'accettata') {
+      await inviaConFinestra(ctx, { clienteId: esito.clienteId, telefono: esito.telefono }, { tipo: 'testo', testo: testoEsito(esito) })
+    }
+  })
 }

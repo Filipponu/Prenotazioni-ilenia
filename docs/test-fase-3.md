@@ -26,8 +26,8 @@ Cosa c'è in questa fase:
 - **Telefono**: la barra in basso ha Agenda, Richieste, Messaggi, Clienti e **Altro** (Servizi, Orari,
   Impostazioni).
 
-Il posto lasciato libero da una disdetta o da uno spostamento sarà proposto alla lista d'attesa
-nella Fase 4.
+Il posto lasciato libero da una disdetta o da uno spostamento viene proposto alla lista d'attesa
+(Fase 4, vedi [test-fase-4.md](test-fase-4.md)).
 
 ---
 

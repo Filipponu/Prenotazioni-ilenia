@@ -1,6 +1,7 @@
 'use client'
 
 import { gestisciEvento, type Notifica } from '@ilenia/shared/bot/motore'
+import { descriviNotifica } from '@ilenia/shared/bot/notifiche'
 import { formattaTelefono } from '@ilenia/shared/telefono'
 import { adesso, versoIso } from '@ilenia/shared/tempo'
 import type { Cliente } from '@ilenia/shared/tipi-db'
@@ -75,21 +76,8 @@ function Simulatore() {
   }, [telefono, caricaChat])
 
   function mostraNotifica(n: Notifica) {
-    if (n.tipo === 'richiesta') {
-      avvisi.successo(
-        n.confermata
-          ? `Nuova prenotazione: ${n.cliente}, ${n.servizio} ${n.quando}`
-          : `Nuova richiesta da approvare: ${n.cliente}, ${n.servizio} ${n.quando}`,
-      )
-    } else if (n.tipo === 'operatore') {
-      avvisi.successo(`${n.cliente} vuole parlare con te`)
-    } else if (n.tipo === 'disdetta') {
-      avvisi.successo(`${n.cliente} ha disdetto: ${n.servizio} ${n.quando}`)
-    } else if (n.tipo === 'spostamento') {
-      avvisi.successo(`${n.cliente} ha spostato ${n.servizio}: da ${n.da} a ${n.a}`)
-    } else {
-      avvisi.successo(`Messaggio da ${n.cliente}: ${n.testo}`)
-    }
+    const { titolo, testo } = descriviNotifica(n)
+    avvisi.successo(`${titolo}: ${testo}`)
   }
 
   async function ricevi(contenuto: ContenutoIngresso) {
@@ -150,6 +138,10 @@ function Simulatore() {
               <li>Approvala da <strong>Richieste</strong>: qui in chat arriva la conferma.</li>
               <li>Prova <strong>Sposta</strong> e <strong>Disdici</strong> (fino a 24 ore prima).</li>
               <li>Scrivi «operatore»: la chat compare in <strong>Messaggi</strong>, dove rispondi tu.</li>
+              <li>
+                Disdici come <strong>Sara Ricci</strong>: il posto va in <strong>Lista d&apos;attesa</strong>; poi scrivi come la
+                cliente a cui è proposto e accetta.
+              </li>
             </ol>
             <p className="mt-3 text-xs text-stone-500">
               Sul telefono della cliente i pulsanti e le liste sono quelli di WhatsApp; qui sono disegnati in modo simile.

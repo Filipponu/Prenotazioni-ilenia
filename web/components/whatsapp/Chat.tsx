@@ -115,6 +115,16 @@ function Fumetto({
             </BottoneWa>
           ))
         : null}
+      {m.tipo === 'template'
+        ? (m.risposte ?? []).map((payload) => {
+            const titolo = payload.startsWith('anticipo-ok') ? 'Accetto' : payload.startsWith('anticipo-no') ? 'No grazie' : payload
+            return (
+              <BottoneWa key={payload} disabilitato={!onScelta} onClick={() => onScelta?.(payload, titolo)}>
+                {titolo}
+              </BottoneWa>
+            )
+          })
+        : null}
       {m.tipo === 'lista' ? (
         <BottoneWa disabilitato={!onScelta} onClick={() => onApriLista({ titolo: m.pulsante, righe: m.righe })}>
           ☰ {m.pulsante}

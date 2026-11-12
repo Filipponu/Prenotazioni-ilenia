@@ -5,6 +5,7 @@ import { dataIso, dataLunga, daDataOra, daIso, durataLeggibile, oraBreve, versoI
 import type { Appuntamento, Cliente, Servizio, StatoAppuntamento } from '@ilenia/shared/tipi-db'
 import type { DateTime } from 'luxon'
 import { useState } from 'react'
+import { disdici, ErroreInvio } from '@/lib/api'
 import { messaggioErrore } from '@/lib/errori'
 import { useOperatrice } from '@/lib/sessione'
 import { STATI } from '@/lib/stati'
@@ -14,7 +15,7 @@ import { useConferma } from '../Conferma'
 import { nomeCliente, SelettoreCliente } from '../clienti'
 import { AzioniRichiesta, EtichettaFinestra, useFinestra } from '../richieste/AzioniRichiesta'
 import { Finestra } from '../Finestra'
-import { AreaTesto, Campo, Etichetta, Pulsante, Scelta, Voce } from '../ui'
+import { AreaTesto, Campo, Etichetta, Interruttore, Pulsante, Scelta, Voce } from '../ui'
 
 export type AppuntamentoCompleto = Appuntamento & {
   clienti: Cliente | null
@@ -153,18 +154,24 @@ export function ModuloAppuntamento({
     onSalvato()
   }
 
-  async function cambiaStato(nuovo: StatoAppuntamento, domanda: string) {
-    if (!esistente || !(await conferma({ titolo: 'Disdire l\'appuntamento?', messaggio: domanda, conferma: 'Disdici', pericolo: true })))
-      return
+  const [disdettaAperta, setDisdettaAperta] = useState(false)
+  const [proponi, setProponi] = useState(true)
+  const futuro = esistente ? Date.parse(esistente.inizio) > Date.now() : false
+
+  async function disdiciOra() {
+    if (!esistente) return
     setInCorso(true)
-    const { error } = await supabase().from('appuntamenti').update({ stato: nuovo }).eq('id', esistente.id)
-    setInCorso(false)
-    if (error) {
-      setErrore(messaggioErrore(error))
-      return
+    try {
+      const r = await disdici(operatrice.id, esistente.id, proponi && futuro)
+      avvisi.successo(r.proposto ? "Appuntamento disdetto: il posto è proposto alla lista d'attesa" : 'Appuntamento disdetto')
+      setDisdettaAperta(false)
+      onSalvato()
+    } catch (e) {
+      setDisdettaAperta(false)
+      setErrore(e instanceof ErroreInvio ? e.message : messaggioErrore(e))
+    } finally {
+      setInCorso(false)
     }
-    avvisi.successo(nuovo === 'disdetto' ? 'Appuntamento disdetto' : 'Stato aggiornato')
-    onSalvato()
   }
 
   async function elimina() {
@@ -196,6 +203,7 @@ export function ModuloAppuntamento({
       : ['confermato', 'in_attesa', 'completato']
 
   return (
+    <>
     <Finestra
       aperta
       onChiudi={onChiudi}
@@ -206,7 +214,7 @@ export function ModuloAppuntamento({
             <Pulsante
               variante="pericolo"
               className="mr-auto"
-              onClick={() => void cambiaStato('disdetto', `L'appuntamento di ${nomeCliente(esistente.clienti)} verrà segnato come disdetto e lo spazio tornerà libero.`)}
+              onClick={() => setDisdettaAperta(true)}
             >
               Disdici
             </Pulsante>
@@ -336,6 +344,34 @@ export function ModuloAppuntamento({
         ) : null}
       </form>
     </Finestra>
+    {esistente ? (
+      <Finestra
+        aperta={disdettaAperta}
+        onChiudi={() => setDisdettaAperta(false)}
+        titolo="Disdire l'appuntamento?"
+        piede={
+          <>
+            <Pulsante variante="secondario" onClick={() => setDisdettaAperta(false)}>
+              Annulla
+            </Pulsante>
+            <Pulsante variante="pericolo" onClick={() => void disdiciOra()} inCorso={inCorso}>
+              Disdici
+            </Pulsante>
+          </>
+        }
+      >
+        <p className="text-sm text-stone-700">
+          L&apos;appuntamento di {nomeCliente(esistente.clienti)} verrà segnato come disdetto e lo spazio tornerà libero.
+        </p>
+        {futuro ? (
+          <label className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-stone-50 px-3 py-2.5">
+            <span className="text-sm text-stone-800">Proponi il posto alla lista d&apos;attesa</span>
+            <Interruttore attivo={proponi} onCambia={setProponi} etichetta="Proponi il posto alla lista d'attesa" />
+          </label>
+        ) : null}
+      </Finestra>
+    ) : null}
+    </>
   )
 }
 

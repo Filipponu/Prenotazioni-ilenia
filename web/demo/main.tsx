@@ -8,6 +8,7 @@ import LayoutPannello from '@/app/(pannello)/layout'
 import PaginaAgenda from '@/app/(pannello)/agenda/page'
 import PaginaClienti from '@/app/(pannello)/clienti/page'
 import PaginaImpostazioni from '@/app/(pannello)/impostazioni/page'
+import PaginaListaAttesa from '@/app/(pannello)/lista-attesa/page'
 import PaginaMessaggi from '@/app/(pannello)/messaggi/page'
 import PaginaOrari from '@/app/(pannello)/orari/page'
 import PaginaRichieste from '@/app/(pannello)/richieste/page'
@@ -24,6 +25,7 @@ const PAGINE: Record<string, () => React.JSX.Element> = {
   '/agenda/': PaginaAgenda,
   '/richieste/': PaginaRichieste,
   '/messaggi/': PaginaMessaggi,
+  '/lista-attesa/': PaginaListaAttesa,
   '/whatsapp/': PaginaWhatsApp,
   '/clienti/': PaginaClienti,
   '/servizi/': PaginaServizi,

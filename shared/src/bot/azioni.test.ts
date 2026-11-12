@@ -60,6 +60,13 @@ function dati(): DbDemo {
     ],
     lista_attesa: [{ id: 'l1', appuntamento_id: 'a2', cliente_id: 'c-chiusa', operatrice_id: OP, attiva: true }],
     log_messaggi: [],
+    impostazioni: [
+      { operatrice_id: OP, lista_attesa_modalita: 'manuale', lista_attesa_minuti_risposta: 15, lista_attesa_preavviso_minimo_min: 120 },
+    ],
+    orari_settimanali: [],
+    chiusure: [],
+    slot_liberati: [],
+    proposte_anticipo: [],
   }
 }
 

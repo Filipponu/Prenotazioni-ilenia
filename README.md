@@ -5,7 +5,7 @@ dalle prossime fasi, bot WhatsApp sull'**API Cloud ufficiale di Meta**.
 Obiettivo: costo di gestione vicino a zero e nessun rischio di ban del numero.
 
 - Piano approvato: [`docs/PIANO.md`](docs/PIANO.md)
-- Come provare: [Fase 1](docs/test-fase-1.md) · [Fase 2](docs/test-fase-2.md) · [Fase 3](docs/test-fase-3.md)
+- Come provare: [Fase 1](docs/test-fase-1.md) · [Fase 2](docs/test-fase-2.md) · [Fase 3](docs/test-fase-3.md) · [Fase 4](docs/test-fase-4.md)
 
 ## Stato
 
@@ -14,7 +14,7 @@ Obiettivo: costo di gestione vicino a zero e nessun rischio di ban del numero.
 | 1 | Database, login, pannello (agenda, servizi, orari, clienti, impostazioni) | ✅ pronta da provare |
 | 2 | Webhook WhatsApp e bot di prenotazione (numero di test Meta) | ✅ pronta (provata con messaggi simulati; manca l'account Meta) |
 | 3 | Approvazione manuale/automatica, disdette e spostamenti | ✅ pronta (provata con messaggi simulati) |
-| 4 | Lista d'attesa (automatica e manuale) | — |
+| 4 | Lista d'attesa (automatica e manuale) | ✅ pronta (provata con messaggi simulati) |
 | 5 | PWA installabile, notifiche push, promemoria | — |
 | 6 | Deploy e guida per la SIM su Meta Business | — |
 

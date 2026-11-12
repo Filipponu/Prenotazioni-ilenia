@@ -195,6 +195,16 @@ await page.getByText('Sara Neri · Colore + piega').first().waitFor()
 await senzaAvvisi(page)
 await page.screenshot({ path: FOTO + '07-agenda-settimana.png', fullPage: true })
 
+// nel sito vero la disdetta dall'agenda passa dal Worker: qui la simulo sul finto Supabase
+await page.route('**/api/pannello/appuntamenti/*/disdici', async (route) => {
+  const id = route.request().url().split('/').at(-2)
+  await fetch(`http://127.0.0.1:54321/rest/v1/appuntamenti?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ stato: 'disdetto' }),
+  })
+  await route.fulfill({ json: { proposto: false } })
+})
 passo('agenda: apri e disdici')
 await page.getByText('Giulia Verdi · Taglio donna').first().click()
 await page.locator('dialog').getByText('Inserito dal pannello').waitFor()

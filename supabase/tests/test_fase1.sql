@@ -292,3 +292,43 @@ select test.errore(
   $q$insert into public.log_messaggi (direzione, telefono, tipo, costo) values ('out', '39333', 'testo', 'libero')$q$,
   '42501', 'il pannello non scrive nel registro messaggi');
 reset role;
+
+-- ---------------------------------------------------------------------
+-- Fase 4: lista d'attesa
+-- ---------------------------------------------------------------------
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub": "11111111-1111-1111-1111-111111111111"}', false);
+update public.impostazioni set numero_whatsapp = '393000000999' where operatrice_id = :'ilenia';
+select test.ok((select numero_whatsapp from public.impostazioni) = '393000000999', 'numero WhatsApp del bot salvato');
+select test.errore(
+  format('update public.impostazioni set numero_whatsapp = %L where operatrice_id = %L', '+39 333', :'ilenia'),
+  '23514', 'numero WhatsApp del bot non valido rifiutato');
+reset role;
+
+insert into public.slot_liberati (id, operatrice_id, inizio, fine)
+values ('aaaaaaaa-0000-0000-0000-00000000000a', :'ilenia', '2026-11-20 10:00+01', '2026-11-20 11:00+01');
+insert into public.appuntamenti (id, operatrice_id, cliente_id, inizio, fine, stato)
+values ('aaaaaaaa-0000-0000-0000-00000000000b', :'ilenia', :'maria', '2026-11-27 10:00+01', '2026-11-27 10:45+01', 'confermato');
+insert into public.proposte_anticipo (slot_id, cliente_id, appuntamento_id, operatrice_id, nuovo_inizio, nuova_fine, canale, stato, codice)
+values ('aaaaaaaa-0000-0000-0000-00000000000a', :'maria', 'aaaaaaaa-0000-0000-0000-00000000000b', :'ilenia',
+        '2026-11-20 10:00+01', '2026-11-20 10:45+01', 'manuale', 'da_inviare', 'K7P2Q');
+select test.errore(
+  format($q$insert into public.proposte_anticipo (slot_id, cliente_id, appuntamento_id, operatrice_id, nuovo_inizio, nuova_fine, canale, stato, codice)
+            values (%L, %L, %L, %L, '2026-11-20 10:00+01', '2026-11-20 10:45+01', 'manuale', 'inviata', 'ZZZZ9')$q$,
+         'aaaaaaaa-0000-0000-0000-00000000000a', :'maria', 'aaaaaaaa-0000-0000-0000-00000000000b', :'ilenia'),
+  '23505', 'una sola proposta aperta per posto liberato');
+
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub": "22222222-2222-2222-2222-222222222222"}', false);
+select test.ok((select count(*) from public.proposte_anticipo) = 0, 'Giulia non vede le proposte di Ilenia');
+reset role;
+
+-- costi comunicati da Meta (webhook di stato)
+set role service_role;
+update public.log_messaggi set fatturato = true, categoria_meta = 'utility' where wa_message_id = 'wamid.4';
+update public.log_messaggi set fatturato = false, categoria_meta = 'service' where wa_message_id = 'wamid.2';
+reset role;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub": "11111111-1111-1111-1111-111111111111"}', false);
+select test.ok((select fatturati from public.contatore_messaggi_mensile) = 1, 'contatore: 1 messaggio fatturato da Meta');
+reset role;

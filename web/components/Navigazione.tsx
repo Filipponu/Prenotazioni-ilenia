@@ -8,7 +8,7 @@ import { modalitaDemo, supabase } from '@/lib/supabase'
 import { Finestra } from './Finestra'
 import { cx } from './ui'
 
-type Voce = { href: string; etichetta: string; icona: React.ReactNode; contatore?: 'richieste' | 'messaggi' }
+type Voce = { href: string; etichetta: string; icona: React.ReactNode; contatore?: 'richieste' | 'messaggi' | 'attesa' }
 
 const icona = (d: string) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-6" aria-hidden>
@@ -52,6 +52,12 @@ const MESSAGGI: Voce = {
   ),
 }
 const CLIENTI: Voce = { href: '/clienti/', etichetta: 'Clienti', icona: ICONA_CLIENTI }
+const LISTA_ATTESA: Voce = {
+  href: '/lista-attesa/',
+  etichetta: "Lista d'attesa",
+  contatore: 'attesa',
+  icona: icona('M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z'),
+}
 const SERVIZI: Voce = { href: '/servizi/', etichetta: 'Servizi', icona: ICONA_SERVIZI }
 const ORARI: Voce = { href: '/orari/', etichetta: 'Orari', icona: ICONA_ORARI }
 const IMPOSTAZIONI: Voce = { href: '/impostazioni/', etichetta: 'Impostazioni', icona: ICONA_IMPOSTAZIONI }
@@ -68,20 +74,30 @@ const ICONA_ALTRO = icona(
 )
 
 const PRINCIPALI = [AGENDA, RICHIESTE, MESSAGGI, CLIENTI]
-const SECONDARIE = modalitaDemo ? [PROVA_BOT, SERVIZI, ORARI, IMPOSTAZIONI] : [SERVIZI, ORARI, IMPOSTAZIONI]
+const SECONDARIE = modalitaDemo
+  ? [LISTA_ATTESA, PROVA_BOT, SERVIZI, ORARI, IMPOSTAZIONI]
+  : [LISTA_ATTESA, SERVIZI, ORARI, IMPOSTAZIONI]
 
 /** Richieste da approvare e clienti che hanno chiesto di parlare con te. */
 function useContatori() {
-  const [contatori, setContatori] = useState({ richieste: 0, messaggi: 0 })
+  const [contatori, setContatori] = useState({ richieste: 0, messaggi: 0, attesa: 0 })
   useEffect(() => {
     let attivo = true
     async function carica() {
       const sb = supabase()
-      const [richieste, messaggi] = await Promise.all([
+      const [richieste, messaggi, attesa] = await Promise.all([
         sb.from('appuntamenti').select('id').eq('stato', 'in_attesa'),
         sb.from('conversazioni').select('id').gt('bot_in_pausa_fino_al', new Date().toISOString()),
+        // proposte della lista d'attesa che Ilenia deve inviare dal suo telefono
+        sb.from('proposte_anticipo').select('id').eq('stato', 'da_inviare'),
       ])
-      if (attivo) setContatori({ richieste: richieste.data?.length ?? 0, messaggi: messaggi.data?.length ?? 0 })
+      if (attivo) {
+        setContatori({
+          richieste: richieste.data?.length ?? 0,
+          messaggi: messaggi.data?.length ?? 0,
+          attesa: attesa.data?.length ?? 0,
+        })
+      }
     }
     void carica()
     const intervallo = setInterval(() => void carica(), 60_000)
@@ -116,6 +132,7 @@ export function Navigazione({ nomeOperatrice }: { nomeOperatrice: string }) {
   const attiva = (href: string) => percorso === href || percorso === href.slice(0, -1)
   const numero = (v: Voce) => (v.contatore ? contatori[v.contatore] : 0)
   const altroAttivo = SECONDARIE.some((v) => attiva(v.href))
+  const altroContatore = SECONDARIE.reduce((somma, v) => somma + numero(v), 0)
 
   return (
     <>
@@ -176,7 +193,10 @@ export function Navigazione({ nomeOperatrice }: { nomeOperatrice: string }) {
                 altroAttivo ? 'text-brand-700' : 'text-stone-500',
               )}
             >
-              {ICONA_ALTRO}
+              <span className="relative">
+                {ICONA_ALTRO}
+                <Contatore n={altroContatore} piccolo />
+              </span>
               Altro
             </button>
           </li>
@@ -197,6 +217,7 @@ export function Navigazione({ nomeOperatrice }: { nomeOperatrice: string }) {
               >
                 {v.icona}
                 {v.etichetta}
+                <Contatore n={numero(v)} />
               </Link>
             </li>
           ))}

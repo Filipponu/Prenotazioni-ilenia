@@ -7,18 +7,21 @@
  * - demo: girano nel browser sui dati finti (i messaggi finiscono nella chat
  *   del simulatore).
  */
+import { chiudiSlot, elaboraScadenze, inviaPropostaManuale, type EsitoRisposta, type MessaggioManuale } from '@ilenia/shared/bot/anticipo'
 import {
   approvaRichiesta,
+  disdiciDalPannello,
   ErroreAzione,
   riattivaBot,
   rifiutaRichiesta,
   rispondiCliente,
+  segnaRispostaProposta,
   type ContestoAzioni,
   type EsitoInvio,
 } from '@ilenia/shared/bot/azioni'
 import { modalitaDemo, supabase } from './supabase'
 
-export type { EsitoInvio }
+export type { EsitoInvio, EsitoRisposta, MessaggioManuale }
 
 /** Errore comprensibile, con l'eventuale link wa.me per scrivere a mano. */
 export class ErroreInvio extends Error {
@@ -44,7 +47,7 @@ function contestoDemo(): ContestoAzioni {
   return { db: supabase(), canale: { invia: async () => ({ id: `wamid.demo.${crypto.randomUUID()}` }) } }
 }
 
-async function chiamaApi(percorso: string, corpo: unknown = {}): Promise<EsitoInvio> {
+async function chiamaApi<T = EsitoInvio>(percorso: string, corpo: unknown = {}): Promise<T> {
   const { data } = await supabase().auth.getSession()
   const token = data.session?.access_token
   if (!token) throw new ErroreInvio('Sessione scaduta: esci e rientra.')
@@ -60,10 +63,10 @@ async function chiamaApi(percorso: string, corpo: unknown = {}): Promise<EsitoIn
   }
   const json = (await r.json().catch(() => ({}))) as { errore?: string; link?: string | null } & Partial<EsitoInvio>
   if (!r.ok) throw new ErroreInvio(json.errore ?? 'Operazione non riuscita.', json.link ?? null)
-  return json as EsitoInvio
+  return json as T
 }
 
-async function esegui(demo: () => Promise<EsitoInvio>, reale: () => Promise<EsitoInvio>): Promise<EsitoInvio> {
+async function esegui<T>(demo: () => Promise<T>, reale: () => Promise<T>): Promise<T> {
   try {
     return await (modalitaDemo ? demo() : reale())
   } catch (e) {
@@ -93,6 +96,46 @@ export function rispondi(clienteId: string, testo: string) {
     () => rispondiCliente(contestoDemo(), clienteId, testo),
     () => chiamaApi(`/clienti/${clienteId}/messaggio`, { testo }),
   )
+}
+
+// --- lista d'attesa
+/** Proposta manuale: Ilenia la sta inviando dal suo telefono (parte il tempo per rispondere). */
+export function segnaPropostaInviata(operatriceId: string, propostaId: string) {
+  return esegui<MessaggioManuale | null>(
+    () => inviaPropostaManuale(contestoDemo(), operatriceId, propostaId),
+    () => chiamaApi<MessaggioManuale>(`/proposte/${propostaId}/inviata`),
+  )
+}
+
+/** Ilenia segna la risposta della cliente a una proposta manuale. */
+export function rispostaProposta(operatriceId: string, propostaId: string, accettata: boolean) {
+  return esegui<EsitoRisposta>(
+    () => segnaRispostaProposta(contestoDemo(), operatriceId, propostaId, accettata),
+    () => chiamaApi<EsitoRisposta>(`/proposte/${propostaId}/risposta`, { accettata }),
+  )
+}
+
+/** Stop alle proposte per un posto (es. Ilenia l'ha riempito lei). */
+export function chiudiPosto(operatriceId: string, slotId: string) {
+  return esegui<unknown>(
+    () => chiudiSlot(contestoDemo(), operatriceId, slotId),
+    () => chiamaApi(`/slot/${slotId}/chiudi`),
+  )
+}
+
+/** Disdetta dall'agenda; se proponi, il posto va alla lista d'attesa. */
+export function disdici(operatriceId: string, appuntamentoId: string, proponi: boolean) {
+  return esegui<{ proposto: boolean }>(
+    () => disdiciDalPannello(contestoDemo(), operatriceId, appuntamentoId, proponi),
+    () => chiamaApi<{ proposto: boolean }>(`/appuntamenti/${appuntamentoId}/disdici`, { proponi }),
+  )
+}
+
+/** Solo demo: le scadenze che nel sito vero gestisce il Worker ogni minuto. */
+export async function scadenzeDemo() {
+  if (!modalitaDemo) return
+  const n = await elaboraScadenze(contestoDemo())
+  if (n > 0) aggiornaContatori()
 }
 
 /** Il bot torna a rispondere a questa cliente (basta il database, nessun messaggio). */

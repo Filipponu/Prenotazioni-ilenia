@@ -4,7 +4,7 @@
  * sembra sempre "viva". Nomi e numeri sono inventati.
  */
 import type { DateTime } from 'luxon'
-import { adesso, daDataOra, versoIso } from '../tempo'
+import { adesso, daDataOra, daIso, versoIso } from '../tempo'
 
 export const ID_UTENTE = '11111111-1111-4111-8111-111111111111'
 export const ID_OPERATRICE = 'a0000000-0000-4000-8000-000000000001'
@@ -145,6 +145,30 @@ function conversazioniDemo(ora: DateTime, appElena: string | undefined) {
   return { log, conversazioni, lista_attesa }
 }
 
+/**
+ * Clienti iscritte alla lista d'attesa (hanno risposto «Sì» a «vuoi essere
+ * avvisata se si libera un posto prima?»): appuntamenti della settimana prossima.
+ */
+function iscritteDemo(appuntamenti: Riga[], creato: string): Riga[] {
+  const iscritte = [
+    ['c-chiara', 5],
+    ['c-maria', 4],
+    ['c-francesca', 6],
+  ] as const
+  return iscritte.flatMap(([cliente, giorno]) => {
+    const app = appuntamenti.find(
+      (a) => a.cliente_id === cliente && a.stato === 'confermato' && String(a.id).startsWith('app-') && daIsoGiorno(String(a.inizio)) === giorno,
+    )
+    return app
+      ? [{ id: `la-${cliente}`, appuntamento_id: app.id, cliente_id: cliente, operatrice_id: ID_OPERATRICE, attiva: true, creato_il: creato, aggiornato_il: creato }]
+      : []
+  })
+}
+
+function daIsoGiorno(iso: string): number {
+  return daIso(iso).weekday
+}
+
 /** Identifica la settimana dei dati (per rigenerarli quando cambia). */
 export function chiaveSettimana(): string {
   return adesso().startOf('week').toISODate() ?? ''
@@ -280,6 +304,7 @@ export function creaDatiDemo(): DbDemo {
         ore_pausa_operatore: 12,
         telefono_salone: '0123 456789',
         email_notifiche: null,
+        numero_whatsapp: '393000000999',
         creato_il: creato,
         aggiornato_il: creato,
       },
@@ -293,7 +318,7 @@ export function creaDatiDemo(): DbDemo {
     contatore_base: [{ mese: ora.toUTC().toFormat('yyyy-LL'), liberi: 186, template: 2, ricevuti: 141 }],
     log_messaggi: esempio.log,
     conversazioni: esempio.conversazioni,
-    lista_attesa: esempio.lista_attesa,
+    lista_attesa: [...esempio.lista_attesa, ...iscritteDemo(appuntamenti, creato)],
     slot_liberati: [],
     proposte_anticipo: [],
     push_iscrizioni: [],

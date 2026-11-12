@@ -90,11 +90,31 @@ export const TESTI = {
     `Mi dispiace, ${operatrice} non può confermare l'appuntamento per ${servizio} di ${quando}.` +
     `${motivo ? `\n${motivo}` : ''}\n\nVuoi scegliere un altro orario?`,
   pulsanteAltroOrario: 'Scegli altro orario',
+
+  // --- lista d'attesa
+  propostaAnticipo: (servizio: string, nuovo: string, attuale: string, minuti: number) =>
+    `Si è liberato un posto prima per ${servizio}: ${nuovo} (ora hai ${attuale}).\n\nTi interessa? Hai ${minuti} minuti per rispondere.`,
+  propostaManuale: (nome: string, servizio: string, nuovo: string, attuale: string, minuti: number, link: string | null) =>
+    `Ciao${nome ? ` ${nome}` : ''}! Si è liberato un posto prima per ${servizio}: ${nuovo} (ora hai ${attuale}).` +
+    (link
+      ? `\n\nSe ti interessa, entro ${minuti} minuti tocca qui e invia il messaggio: ${link}`
+      : `\n\nSe ti interessa, rispondimi entro ${minuti} minuti.`),
+  pulsanteAccetto: 'Accetto',
+  pulsanteNoGrazie: 'No grazie',
+  anticipoAccettato: (servizio: string, quando: string) =>
+    `Fatto! Il tuo appuntamento per ${servizio} è anticipato a ${quando}. A presto!`,
+  anticipoRifiutato: (quando: string) => `Va bene, resta tutto com'era: ti aspettiamo ${quando}.`,
+  anticipoScaduto: "Mi dispiace, il tempo per accettare è scaduto e il posto è stato proposto a un'altra cliente.",
+  anticipoPreso: (quando: string) =>
+    `Mi dispiace, quel posto è appena stato preso. Il tuo appuntamento resta ${quando}.`,
+  anticipoNonTrovato: 'Non trovo questa proposta: forse è già stata gestita.',
 } as const
 
 /** Template da far approvare a Meta (vedi guida Fase 6). */
 export const TEMPLATE = {
   /** {{1}} nome, {{2}} servizio, {{3}} giorno e ora */
   conferma: 'conferma_appuntamento',
+  /** {{1}} nome, {{2}} servizio, {{3}} nuovo giorno e ora, {{4}} appuntamento attuale, {{5}} minuti; pulsanti Accetto / No grazie */
+  anticipo: 'proposta_anticipo',
   lingua: 'it',
 } as const

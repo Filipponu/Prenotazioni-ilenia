@@ -175,6 +175,8 @@ export type Impostazioni = {
   ore_pausa_operatore: number
   telefono_salone: string | null
   email_notifiche: string | null
+  /** numero WhatsApp del bot (wa_id), per il link «ACCETTO» della lista d'attesa manuale */
+  numero_whatsapp: string | null
   creato_il: string
   aggiornato_il: string
 }
@@ -191,6 +193,9 @@ export type LogMessaggio = {
   contenuto: Json | null
   stato_consegna: string | null
   errore: string | null
+  /** dal webhook di stato di Meta: il messaggio è a pagamento? */
+  fatturato: boolean | null
+  categoria_meta: string | null
   creato_il: string
 }
 
@@ -209,6 +214,7 @@ export type ContatoreMessaggiMensile = {
   liberi: number | null
   template: number | null
   ricevuti: number | null
+  fatturati: number | null
 }
 
 export type Database = {
