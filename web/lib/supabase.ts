@@ -3,6 +3,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@ilenia/shared/tipi-db'
 import { fetchDemo } from '@ilenia/shared/demo/backend'
+import { configurazione, modalitaDemo } from './configurazione'
 
 /**
  * Client Supabase del browser. Usa solo la chiave pubblica: cosa si può
@@ -10,20 +11,13 @@ import { fetchDemo } from '@ilenia/shared/demo/backend'
  *
  * Con NEXT_PUBLIC_DEMO=1 il pannello diventa una versione dimostrativa:
  * nessun Supabase vero, i dati di esempio vivono nel browser.
+ * Indirizzo e chiave arrivano da lib/configurazione.ts.
  */
-export const modalitaDemo = process.env.NEXT_PUBLIC_DEMO === '1'
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const chiave = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? ''
-
-export const configurazioneMancante = !modalitaDemo && (!url || !chiave)
+export { modalitaDemo }
 
 let client: SupabaseClient<Database> | null = null
 
 export function supabase(): SupabaseClient<Database> {
-  if (configurazioneMancante) {
-    throw new Error('Configurazione Supabase mancante (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)')
-  }
   client ??= modalitaDemo
     ? createClient<Database>('https://demo.prenotazioni.invalid', 'chiave-demo', {
         global: { fetch: fetchDemo },
@@ -34,7 +28,7 @@ export function supabase(): SupabaseClient<Database> {
           storageKey: 'ilenia-demo-accesso',
         },
       })
-    : createClient<Database>(url, chiave, {
+    : createClient<Database>(configurazione().supabaseUrl, configurazione().supabaseChiave, {
         auth: {
           persistSession: true,
           autoRefreshToken: true,

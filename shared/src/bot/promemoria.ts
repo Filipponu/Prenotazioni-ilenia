@@ -82,7 +82,14 @@ export async function inviaPromemoria(
               anteprima: T.promemoria(servizio, quando, imp.telefono_salone),
             },
           )
-          esito = invio.inviato === 'libero' ? 'whatsapp' : invio.inviato === 'template' ? 'template' : 'senza_contatto'
+          esito =
+            invio.inviato === 'libero'
+              ? 'whatsapp'
+              : invio.inviato === 'template'
+                ? 'template'
+                : invio.motivo === 'template_non_riuscito'
+                  ? 'errore'
+                  : 'senza_contatto'
         } else if (app.clienti?.email && ctx.email) {
           await ctx.email(
             app.clienti.email,

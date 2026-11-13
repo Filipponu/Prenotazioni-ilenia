@@ -3,7 +3,8 @@
 import type { Session } from '@supabase/supabase-js'
 import type { Operatrice } from '@ilenia/shared/tipi-db'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { configurazioneMancante, supabase } from './supabase'
+import { caricaConfigurazione } from './configurazione'
+import { supabase } from './supabase'
 
 export type StatoSessione =
   | { stato: 'caricamento' }
@@ -29,12 +30,8 @@ export function FornitoreSessione({ children }: { children: React.ReactNode }) {
   const utenteCaricato = useRef<string | null>(null)
 
   useEffect(() => {
-    if (configurazioneMancante) {
-      setSessione({ stato: 'configurazione_mancante' })
-      return
-    }
-    const sb = supabase()
     let attivo = true
+    let iscrizione: { subscription: { unsubscribe: () => void } } | null = null
 
     async function carica(session: Session | null) {
       if (!session) {
@@ -47,7 +44,7 @@ export function FornitoreSessione({ children }: { children: React.ReactNode }) {
         setSessione((s) => (s.stato === 'pronta' ? { ...s, session } : s))
         return
       }
-      const { data, error } = await sb
+      const { data, error } = await supabase()
         .from('operatrici')
         .select('*')
         .eq('user_id', session.user.id)
@@ -58,17 +55,24 @@ export function FornitoreSessione({ children }: { children: React.ReactNode }) {
       else setSessione({ stato: 'pronta', session, operatrice: data })
     }
 
-    const { data: iscrizione } = sb.auth.onAuthStateChange((evento, session) => {
-      if (evento === 'PASSWORD_RECOVERY') setRecuperoPassword(true)
-      // niente await dentro il callback di Supabase: si rimanda al giro successivo
-      setTimeout(() => {
-        if (attivo) void carica(session)
-      }, 0)
+    void caricaConfigurazione().then((c) => {
+      if (!attivo) return
+      if (!c) {
+        setSessione({ stato: 'configurazione_mancante' })
+        return
+      }
+      iscrizione = supabase().auth.onAuthStateChange((evento, session) => {
+        if (evento === 'PASSWORD_RECOVERY') setRecuperoPassword(true)
+        // niente await dentro il callback di Supabase: si rimanda al giro successivo
+        setTimeout(() => {
+          if (attivo) void carica(session)
+        }, 0)
+      }).data
     })
 
     return () => {
       attivo = false
-      iscrizione.subscription.unsubscribe()
+      iscrizione?.subscription.unsubscribe()
     }
   }, [])
 

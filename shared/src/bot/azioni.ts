@@ -30,7 +30,8 @@ export interface ContestoAzioni {
 export type EsitoInvio =
   | { inviato: 'libero' }
   | { inviato: 'template' }
-  | { inviato: 'no'; motivo: 'senza_telefono' | 'finestra_chiusa'; link?: string }
+  /** template_non_riuscito: modello non approvato, pagamento non attivo, ecc. → link per scrivere a mano */
+  | { inviato: 'no'; motivo: 'senza_telefono' | 'finestra_chiusa' | 'template_non_riuscito'; link?: string }
 
 export class ErroreAzione extends Error {
   constructor(
@@ -77,8 +78,13 @@ export async function inviaConFinestra(
     return { inviato: 'libero' }
   }
   if (template) {
-    await inviaERegistra(ctx.db, ctx.canale, { clienteId: dest.clienteId, telefono }, template)
-    return { inviato: 'template' }
+    try {
+      await inviaERegistra(ctx.db, ctx.canale, { clienteId: dest.clienteId, telefono }, template)
+      return { inviato: 'template' }
+    } catch (e) {
+      console.error('Template non inviato', e)
+      return { inviato: 'no', motivo: 'template_non_riuscito', link: linkWhatsApp(telefono, testoSemplice(libero)) }
+    }
   }
   return { inviato: 'no', motivo: 'finestra_chiusa', link: linkWhatsApp(telefono, testoSemplice(libero)) }
 }

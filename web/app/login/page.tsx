@@ -6,7 +6,7 @@ import { useAvvisi } from '@/components/Avvisi'
 import { Campo, Pulsante, Scheda, Voce } from '@/components/ui'
 import { useSessione } from '@/lib/sessione'
 import { EMAIL_DEMO, PASSWORD_DEMO } from '@ilenia/shared/demo/dati'
-import { configurazioneMancante, modalitaDemo, supabase } from '@/lib/supabase'
+import { modalitaDemo, supabase } from '@/lib/supabase'
 
 export default function Login() {
   const { sessione, recuperoPassword, fineRecuperoPassword } = useSessione()
@@ -83,9 +83,10 @@ export default function Login() {
         </p>
       ) : null}
       <Scheda>
-        {configurazioneMancante ? (
+        {sessione.stato === 'configurazione_mancante' ? (
           <p className="text-sm text-red-700">
-            Configurazione mancante: imposta <code>NEXT_PUBLIC_SUPABASE_URL</code> e{' '}
+            Configurazione mancante: sul Worker imposta <code>SUPABASE_URL</code> e <code>SUPABASE_PUBLISHABLE_KEY</code>{' '}
+            (guida: <code>docs/guida-messa-online.md</code>). In sviluppo: <code>NEXT_PUBLIC_SUPABASE_URL</code> e{' '}
             <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> in <code>web/.env.local</code>.
           </p>
         ) : recuperoPassword ? (

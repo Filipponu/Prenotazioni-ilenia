@@ -5,6 +5,7 @@ notifiche push e bot WhatsApp sull'**API Cloud ufficiale di Meta**.
 Obiettivo: costo di gestione vicino a zero e nessun rischio di ban del numero.
 
 - Piano approvato: [`docs/PIANO.md`](docs/PIANO.md)
+- **Messa online**: [guida passo passo](docs/guida-messa-online.md) · [collegare WhatsApp](docs/guida-whatsapp.md)
 - Come provare: [Fase 1](docs/test-fase-1.md) · [Fase 2](docs/test-fase-2.md) · [Fase 3](docs/test-fase-3.md) · [Fase 4](docs/test-fase-4.md) · [Fase 5](docs/test-fase-5.md)
 
 ## Stato
@@ -16,7 +17,7 @@ Obiettivo: costo di gestione vicino a zero e nessun rischio di ban del numero.
 | 3 | Approvazione manuale/automatica, disdette e spostamenti | ✅ pronta (provata con messaggi simulati) |
 | 4 | Lista d'attesa (automatica e manuale) | ✅ pronta (provata con messaggi simulati) |
 | 5 | PWA installabile, notifiche push, promemoria | ✅ pronta (push provate nel browser; mancano chiavi e sito pubblicato) |
-| 6 | Deploy e guida per la SIM su Meta Business | — |
+| 6 | Deploy e guida per la SIM su Meta Business | ✅ pronta (script provati contro servizi finti; mancano gli account) |
 
 ## Struttura
 
@@ -30,7 +31,7 @@ web/                   pannello Next.js esportato come file statici (+ demo in u
 worker/                Worker Cloudflare: webhook WhatsApp, bot, notifiche, promemoria (cron),
                        file statici del pannello
 strumenti/             prove nel browser, Supabase finto in locale, simulatore di messaggi WhatsApp,
-                       chiavi VAPID, icone
+                       chiavi VAPID, icone, messa online (database, pubblicazione, numero WhatsApp)
 docs/                  piano e guide
 ```
 
@@ -42,10 +43,13 @@ npm run dev         # pannello su http://localhost:3000 (serve web/.env.local)
 npm test            # test del codice condiviso e del Worker
 npm run dev -w worker   # Worker + pannello su http://localhost:8787 (serve worker/.dev.vars)
 npm run typecheck
-npm run build       # web/out: file statici pronti per Cloudflare
+npm run build       # web/out: file statici pronti per Cloudflare (senza chiavi dentro)
+npm run online:pubblica -- --progetto <rif. Supabase>   # aggiornare il sito (vedi guida)
 ```
 
-Nessuna chiave va nel codice: vedi [`.env.example`](.env.example).
+Nessuna chiave va nel codice: vedi [`.env.example`](.env.example). Nel sito vero il pannello legge
+indirizzo di Supabase e chiavi pubbliche dal Worker (`/api/config`), che le tiene nelle sue
+variabili su Cloudflare.
 
 ## Versione dimostrativa
 

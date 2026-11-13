@@ -114,6 +114,19 @@ describe('approvaRichiesta', () => {
     expect(datiDemo().log_messaggi![0]).toMatchObject({ costo: 'template', template_nome: 'conferma_appuntamento' })
   })
 
+  it('template rifiutato da Meta (es. pagamento non attivo): confermata comunque, link per avvisarla a mano', async () => {
+    const canale = ctx.canale
+    ctx.canale = { invia: async () => Promise.reject(new Error('(#131042) Business eligibility payment issue')) }
+    try {
+      const esito = await approvaRichiesta(ctx, OP, 'a2')
+      expect(esito).toMatchObject({ inviato: 'no', motivo: 'template_non_riuscito' })
+      expect((esito as { link: string }).link).toMatch(/^https:\/\/wa\.me\/\d+\?text=/)
+      expect(app('a2')).toMatchObject({ stato: 'confermato', conferma_via_template: false })
+    } finally {
+      ctx.canale = canale
+    }
+  })
+
   it('cliente senza numero: confermata, nessun messaggio', async () => {
     expect(await approvaRichiesta(ctx, OP, 'a3')).toEqual({ inviato: 'no', motivo: 'senza_telefono' })
     expect(app('a3').stato).toBe('confermato')

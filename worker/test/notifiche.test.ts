@@ -140,3 +140,20 @@ describe('promemoria nel lavoro programmato', () => {
     expect(d.appuntamenti!.find((a) => a.id === 'app-domani')!.promemoria_esito).toBe('email')
   })
 })
+
+describe('valori pubblici per il pannello', () => {
+  const app = creaApp(dipendenze)
+  it('GET /api/config: indirizzo, chiave pubblicabile e chiave push; mai la chiave segreta', async () => {
+    const r = await app.request('/api/config', {}, { ...env, SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_x' } as Ambiente, contesto)
+    const json = await r.json()
+    expect(json).toEqual({ supabaseUrl: 'https://demo.invalid', supabaseChiave: 'sb_publishable_x', chiaveVapid: env.VAPID_PUBLIC_KEY })
+    expect(JSON.stringify(json)).not.toContain('re_prova')
+    expect(r.headers.get('access-control-allow-origin')).toBe('*')
+  })
+
+  it('GET /api/info: nome e contatti del salone (pagina privacy)', async () => {
+    Object.assign(datiDemo().impostazioni![0]!, { telefono_salone: '0123 456789', email_notifiche: 'salone@example.com' })
+    const r = await app.request('/api/info', {}, env, contesto)
+    expect(await r.json()).toMatchObject({ nome: 'Ilenia', telefono: '0123 456789', email: 'salone@example.com' })
+  })
+})

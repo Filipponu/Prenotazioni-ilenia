@@ -9,6 +9,9 @@
  * - GET  /r/:id                 lista d'attesa manuale: segna la proposta come
  *                               inviata e apre WhatsApp col messaggio pronto
  * - GET  /api/salute            controllo che il Worker sia vivo
+ * - GET  /api/config            configurazione pubblica per il pannello
+ *                               (indirizzo Supabase, chiave pubblicabile, chiave push)
+ * - GET  /api/info              nome e contatti del salone (pagina privacy)
  * - ogni minuto (cron)          scadenze della lista d'attesa e promemoria del giorno prima
  * - tutto il resto: file statici del pannello (web/out)
  */
@@ -20,6 +23,7 @@ import { firmaValida } from '@ilenia/shared/whatsapp/firma'
 import { leggiWebhook, type EventoWhatsApp } from '@ilenia/shared/whatsapp/webhook'
 import { createClient } from '@supabase/supabase-js'
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import type { Ambiente } from './ambiente'
 import { creaCanale, type CanaleWorker } from './meta'
 import { inviaEmail } from './email'
@@ -43,6 +47,34 @@ export function creaApp(dipendenze: Dipendenze = predefinite) {
   const app = new Hono<{ Bindings: Ambiente }>()
 
   app.get('/api/salute', (c) => c.json({ ok: true }))
+
+  // solo valori pubblici per natura (finiscono comunque nel browser)
+  app.get('/api/config', cors({ origin: '*', allowMethods: ['GET'] }), (c) => {
+    c.header('cache-control', 'no-store')
+    return c.json({
+      supabaseUrl: c.env.SUPABASE_URL ?? '',
+      supabaseChiave: c.env.SUPABASE_PUBLISHABLE_KEY ?? '',
+      chiaveVapid: c.env.VAPID_PUBLIC_KEY ?? '',
+    })
+  })
+
+  app.get('/api/info', cors({ origin: '*', allowMethods: ['GET'] }), async (c) => {
+    const db = dipendenze.creaDb(c.env)
+    const q = db.from('operatrici').select('id, nome')
+    const { data: op } = c.env.BOT_OPERATRICE_ID
+      ? await q.eq('id', c.env.BOT_OPERATRICE_ID).maybeSingle()
+      : await q.eq('attiva', true).order('creato_il').limit(1).maybeSingle()
+    const { data: imp } = op
+      ? await db.from('impostazioni').select('telefono_salone, numero_whatsapp, email_notifiche').eq('operatrice_id', op.id).maybeSingle()
+      : { data: null }
+    c.header('cache-control', 'public, max-age=300')
+    return c.json({
+      nome: op?.nome ?? null,
+      telefono: imp?.telefono_salone ?? null,
+      whatsapp: imp?.numero_whatsapp ?? null,
+      email: imp?.email_notifiche ?? null,
+    })
+  })
 
   app.get('/api/whatsapp/webhook', (c) => {
     const modo = c.req.query('hub.mode')

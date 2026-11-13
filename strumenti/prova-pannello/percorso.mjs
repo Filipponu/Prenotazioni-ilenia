@@ -268,6 +268,13 @@ await page.getByRole('button', { name: 'Salva', exact: true }).click()
 await avviso(page, 'Impostazioni salvate')
 await page.screenshot({ path: FOTO + '11-impostazioni.png', fullPage: true })
 
+passo('informativa privacy pubblica')
+const priv = await nuovaPagina({ viewport: { width: 1280, height: 860 } })
+await priv.goto(BASE + '/privacy/')
+await priv.getByText('Il titolare del trattamento è Ilenia (titolare del salone), contattabile a: telefono 0123 456789').waitFor()
+await priv.screenshot({ path: FOTO + '17-privacy.png' })
+await priv.context().close()
+
 // ------------------------------------------------------------- app installabile e notifiche
 passo('PWA: manifest, icone e service worker')
 const pwa = await page.evaluate(async () => {

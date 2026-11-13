@@ -21,6 +21,7 @@ import {
 } from '@ilenia/shared/bot/azioni'
 import { inviaPromemoria } from '@ilenia/shared/bot/promemoria'
 import { adesso, daIso } from '@ilenia/shared/tempo'
+import { BASE_API } from './configurazione'
 import { modalitaDemo, supabase } from './supabase'
 
 export type { EsitoInvio, EsitoRisposta, MessaggioManuale }
@@ -35,8 +36,6 @@ export class ErroreInvio extends Error {
   }
 }
 
-/** Indirizzo del Worker: vuoto = stesso sito (il Worker serve anche il pannello). */
-const BASE_API = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 /** Evento per aggiornare i contatori del menu dopo un'azione. */
 export const EVENTO_AGGIORNA_CONTATORI = 'ilenia-contatori'

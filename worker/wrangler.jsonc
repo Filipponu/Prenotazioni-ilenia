@@ -11,6 +11,8 @@
     "not_found_handling": "404-page",
     "run_worker_first": ["/api/*"]
   },
+  // le variabili impostate dal pannello di Cloudflare restano anche dopo ogni pubblicazione
+  "keep_vars": true,
   "vars": {
     // "reale": risponde tramite l'API di Meta; "simulata": scrive le risposte nei log
     "WHATSAPP_MODALITA": "reale",
@@ -20,7 +22,7 @@
   "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true }
   // Segreti (mai qui dentro): wrangler secret put <NOME>
-  //   SUPABASE_URL, SUPABASE_SECRET_KEY,
+  //   SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY,
   //   WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN,
   //   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, APP_URL,
   //   RESEND_API_KEY, RESEND_FROM

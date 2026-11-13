@@ -73,10 +73,14 @@ export function AzioniRichiesta({
       const esito =
         azione === 'approva' ? await approva(operatrice.id, appuntamentoId) : await rifiuta(operatrice.id, appuntamentoId, motivo)
       setRifiutoAperto(false)
-      if (esito.inviato === 'no' && esito.motivo === 'finestra_chiusa' && esito.link) {
+      if (esito.inviato === 'no' && esito.motivo !== 'senza_telefono' && esito.link) {
+        const fatto = azione === 'approva' ? 'Richiesta approvata' : 'Richiesta rifiutata'
         mostraLink({
           titolo: 'Avvisa la cliente',
-          testo: `Richiesta rifiutata. Per avvisare ${cliente} gratis, apri WhatsApp dal tuo telefono: il messaggio è già scritto.`,
+          testo:
+            esito.motivo === 'template_non_riuscito'
+              ? `${fatto}, ma il messaggio WhatsApp a pagamento non è partito (modello non ancora approvato o pagamento non attivo). Avvisa ${cliente} dal tuo telefono: il messaggio è già scritto.`
+              : `${fatto}. Per avvisare ${cliente} gratis, apri WhatsApp dal tuo telefono: il messaggio è già scritto.`,
           link: esito.link,
         })
       } else {

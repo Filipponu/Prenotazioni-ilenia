@@ -6,9 +6,10 @@
  * sviluppo né nella demo.
  */
 import { daB64url } from '@ilenia/shared/notifiche/webpush'
+import { caricaConfigurazione } from './configurazione'
 import { modalitaDemo, supabase } from './supabase'
 
-const CHIAVE_VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''
+const chiaveVapid = async () => (await caricaConfigurazione())?.chiaveVapid ?? ''
 
 // ---------------------------------------------------------------- service worker
 const usaServiceWorker = () =>
@@ -96,7 +97,7 @@ async function registrazione(): Promise<ServiceWorkerRegistration | null> {
 
 export async function statoNotifiche(): Promise<StatoNotifiche> {
   if (modalitaDemo) return 'demo'
-  if (!CHIAVE_VAPID) return 'non_configurate'
+  if (!(await chiaveVapid())) return 'non_configurate'
   const supportate = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
   if (!supportate) return suIos() && !appInstallata() ? 'ios_da_installare' : 'non_supportate'
   if (Notification.permission === 'denied') return 'bloccate'
@@ -138,7 +139,7 @@ export async function attivaNotifiche(operatriceId: string) {
   if (!reg) throw new ErroreNotifiche('Questo browser non gestisce le notifiche push.')
   const sott =
     (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: daB64url(CHIAVE_VAPID) }))
+    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: daB64url(await chiaveVapid()) }))
   await salva(operatriceId, sott)
 }
 

@@ -40,8 +40,8 @@ export default function LayoutPannello({ children }: { children: React.ReactNode
         <Scheda>
           <h1 className="text-lg font-semibold">Configurazione mancante</h1>
           <p className="mt-2 text-sm text-stone-600">
-            Mancano le variabili <code>NEXT_PUBLIC_SUPABASE_URL</code> e{' '}
-            <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>. Vedi <code>docs/test-fase-1.md</code>.
+            Il pannello non trova l&apos;indirizzo del database: sul Worker mancano <code>SUPABASE_URL</code> o{' '}
+            <code>SUPABASE_PUBLISHABLE_KEY</code>. Vedi <code>docs/guida-messa-online.md</code>.
           </p>
         </Scheda>
       </Centrato>

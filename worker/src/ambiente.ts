@@ -4,6 +4,8 @@ export interface Ambiente {
   SUPABASE_URL: string
   /** chiave segreta di Supabase (sb_secret_… o service_role): solo qui, mai nel browser */
   SUPABASE_SECRET_KEY: string
+  /** chiave pubblicabile (sb_publishable_… o anon): il Worker la passa al pannello con /api/config */
+  SUPABASE_PUBLISHABLE_KEY?: string
   WHATSAPP_APP_SECRET: string
   WHATSAPP_VERIFY_TOKEN: string
   WHATSAPP_TOKEN?: string

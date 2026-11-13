@@ -12,7 +12,11 @@
     "build": "npm run build -w web",
     "test": "npm run test -w shared && npm run test -w worker",
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w web && npm run typecheck -w worker",
-    "test:db": "bash supabase/tests/esegui.sh"
+    "test:db": "bash supabase/tests/esegui.sh",
+    "online:database": "node strumenti/messa-online/database.mjs",
+    "online:pubblica": "node strumenti/messa-online/pubblica.mjs",
+    "online:whatsapp": "node strumenti/messa-online/whatsapp.mjs",
+    "test:messa-online": "node strumenti/messa-online/prova.mjs"
   },
   "engines": {
     "node": ">=20"

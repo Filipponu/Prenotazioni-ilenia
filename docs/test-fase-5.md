@@ -51,20 +51,21 @@ Serve il pannello pubblicato su un indirizzo `https://` (Fase 6). In locale funz
 
 ### 1. Chiavi delle notifiche (una volta sola)
 
+Con la messa online della Fase 6 (`strumenti/messa-online/pubblica.mjs`) le chiavi si generano e si
+impostano da sole sul Worker, insieme a `VAPID_SUBJECT` e `APP_URL`. Il pannello legge la chiave
+pubblica dal Worker (`/api/config`).
+
+A mano, o in sviluppo:
+
 ```bash
 node strumenti/genera-chiavi-vapid.mjs
 ```
 
-Stampa tre righe:
-
-- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` va in `web/.env.local` e serve alla compilazione del pannello;
 - `VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` vanno nel Worker. La privata **solo** lì:
   `npx wrangler secret put VAPID_PRIVATE_KEY`; in locale in `worker/.dev.vars`.
-
-Nel Worker servono anche:
-
-- `VAPID_SUBJECT`: `mailto:` seguito dalla tua email;
-- `APP_URL`: l'indirizzo del pannello, per aprire la pagina giusta dalla notifica.
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` serve solo con `npm run dev` sul pannello (`web/.env.local`).
+- Nel Worker servono anche `VAPID_SUBJECT` (`mailto:` seguito dalla tua email) e `APP_URL`
+  (l'indirizzo del pannello, per aprire la pagina giusta dalla notifica).
 
 Se rigeneri le chiavi, le notifiche vanno riattivate su ogni dispositivo.
 
